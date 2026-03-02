@@ -12,7 +12,7 @@ import (
 	"shadiff/internal/model"
 )
 
-// MySQLHook MySQL 协议代理，解析 COM_QUERY 包捕获 SQL 语句
+// MySQLHook is a MySQL protocol proxy that parses COM_QUERY packets to capture SQL statements
 type MySQLHook struct {
 	listenAddr  string
 	targetAddr  string
@@ -22,7 +22,7 @@ type MySQLHook struct {
 	wg          sync.WaitGroup
 }
 
-// MySQL 协议常量
+// MySQL protocol constants
 const (
 	mysqlComQuery        = 0x03
 	mysqlComStmtPrepare  = 0x16
@@ -98,7 +98,7 @@ func (h *MySQLHook) Stop() error {
 func (h *MySQLHook) handleConn(clientConn net.Conn) {
 	defer clientConn.Close()
 
-	// 连接到真实 MySQL
+	// Connect to the real MySQL server
 	serverConn, err := net.DialTimeout("tcp", h.targetAddr, 10*time.Second)
 	if err != nil {
 		logger.Error("mysql connect target failed", err)
@@ -106,17 +106,17 @@ func (h *MySQLHook) handleConn(clientConn net.Conn) {
 	}
 	defer serverConn.Close()
 
-	// 双向转发，同时嗅探客户端发往服务端的数据
+	// Bidirectional forwarding while sniffing client-to-server data
 	var wg sync.WaitGroup
 
-	// 服务端 -> 客户端（透传）
+	// Server -> Client (passthrough)
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		io.Copy(clientConn, serverConn)
 	}()
 
-	// 客户端 -> 服务端（嗅探 MySQL 包）
+	// Client -> Server (sniff MySQL packets)
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -126,7 +126,7 @@ func (h *MySQLHook) handleConn(clientConn net.Conn) {
 	wg.Wait()
 }
 
-// sniffClientToServer 嗅探客户端发送的数据，解析 MySQL 协议包
+// sniffClientToServer sniffs data sent by the client and parses MySQL protocol packets
 func (h *MySQLHook) sniffClientToServer(client, server net.Conn) {
 	buf := make([]byte, 64*1024)
 	for {
@@ -135,24 +135,24 @@ func (h *MySQLHook) sniffClientToServer(client, server net.Conn) {
 			return
 		}
 
-		// 转发到服务端
+		// Forward to server
 		if _, err := server.Write(buf[:n]); err != nil {
 			return
 		}
 
-		// 尝试解析 MySQL 包
+		// Try to parse MySQL packet
 		h.parseMySQLPacket(buf[:n])
 	}
 }
 
-// parseMySQLPacket 解析 MySQL 协议包，提取 SQL 语句
+// parseMySQLPacket parses a MySQL protocol packet and extracts SQL statements
 func (h *MySQLHook) parseMySQLPacket(data []byte) {
-	// MySQL 包格式: 3字节长度 + 1字节序号 + payload
+	// MySQL packet format: 3-byte length + 1-byte sequence number + payload
 	if len(data) < 5 {
 		return
 	}
 
-	// 读取包长度 (3 bytes little-endian)
+	// Read payload length (3 bytes little-endian)
 	payloadLen := int(uint32(data[0]) | uint32(data[1])<<8 | uint32(data[2])<<16)
 	_ = data[3] // sequence number
 
@@ -188,7 +188,7 @@ func (h *MySQLHook) emitSideEffect(query string) {
 	}
 }
 
-// readMySQLPacketLength 读取 MySQL 包长度（辅助函数）
+// readMySQLPacketLength reads the MySQL packet length (helper function)
 func readMySQLPacketLength(data []byte) int {
 	if len(data) < 3 {
 		return 0

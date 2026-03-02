@@ -16,14 +16,14 @@ import (
 	"github.com/google/uuid"
 )
 
-// FileStore 基于文件系统的存储实现
-// 目录结构: {baseDir}/sessions/{id}/session.json, records.jsonl, replay-records.jsonl, diff-results.json
+// FileStore is a file-system-based storage implementation
+// Directory structure: {baseDir}/sessions/{id}/session.json, records.jsonl, replay-records.jsonl, diff-results.json
 type FileStore struct {
 	baseDir string
 	mu      sync.RWMutex
 }
 
-// NewFileStore 创建文件存储实例
+// NewFileStore creates a new file store instance
 func NewFileStore(baseDir string) (*FileStore, error) {
 	dir := filepath.Join(baseDir, "sessions")
 	if err := os.MkdirAll(dir, 0755); err != nil {
@@ -32,9 +32,9 @@ func NewFileStore(baseDir string) (*FileStore, error) {
 	return &FileStore{baseDir: dir}, nil
 }
 
-// --- SessionStore 实现 ---
+// --- SessionStore implementation ---
 
-// Create 创建新会话
+// Create creates a new session
 func (fs *FileStore) Create(session *model.Session) error {
 	fs.mu.Lock()
 	defer fs.mu.Unlock()
@@ -63,14 +63,14 @@ func (fs *FileStore) Create(session *model.Session) error {
 	return fs.saveSession(session)
 }
 
-// Get 根据 ID 获取会话
+// Get retrieves a session by ID
 func (fs *FileStore) Get(id string) (*model.Session, error) {
 	fs.mu.RLock()
 	defer fs.mu.RUnlock()
 	return fs.loadSession(id)
 }
 
-// List 列出所有会话，支持过滤
+// List lists all sessions with optional filtering
 func (fs *FileStore) List(filter *model.SessionFilter) ([]model.Session, error) {
 	fs.mu.RLock()
 	defer fs.mu.RUnlock()
@@ -87,10 +87,10 @@ func (fs *FileStore) List(filter *model.SessionFilter) ([]model.Session, error) 
 		}
 		sess, err := fs.loadSession(entry.Name())
 		if err != nil {
-			continue // 跳过损坏的会话
+			continue // skip corrupted sessions
 		}
 
-		// 应用过滤条件
+		// Apply filter conditions
 		if filter != nil {
 			if filter.Name != "" && !strings.Contains(sess.Name, filter.Name) {
 				continue
@@ -106,14 +106,14 @@ func (fs *FileStore) List(filter *model.SessionFilter) ([]model.Session, error) 
 		sessions = append(sessions, *sess)
 	}
 
-	// 按更新时间倒序
+	// Sort by update time descending
 	sort.Slice(sessions, func(i, j int) bool {
 		return sessions[i].UpdatedAt > sessions[j].UpdatedAt
 	})
 	return sessions, nil
 }
 
-// Update 更新会话元数据
+// Update updates session metadata
 func (fs *FileStore) Update(session *model.Session) error {
 	fs.mu.Lock()
 	defer fs.mu.Unlock()
@@ -121,7 +121,7 @@ func (fs *FileStore) Update(session *model.Session) error {
 	return fs.saveSession(session)
 }
 
-// Delete 删除会话及所有数据
+// Delete deletes a session and all its data
 func (fs *FileStore) Delete(id string) error {
 	fs.mu.Lock()
 	defer fs.mu.Unlock()
@@ -129,14 +129,14 @@ func (fs *FileStore) Delete(id string) error {
 	return os.RemoveAll(dir)
 }
 
-// --- RecordStore 实现 ---
+// --- RecordStore implementation ---
 
-// AppendRecord 追加记录到 JSONL 文件
+// AppendRecord appends a record to the JSONL file
 func (fs *FileStore) AppendRecord(sessionID string, record *model.Record) error {
 	return fs.appendRecord(sessionID, "records.jsonl", record)
 }
 
-// AppendReplayRecord 追加回放记录到 JSONL 文件
+// AppendReplayRecord appends a replay record to the JSONL file
 func (fs *FileStore) AppendReplayRecord(sessionID string, record *model.Record) error {
 	return fs.appendRecord(sessionID, "replay-records.jsonl", record)
 }
@@ -161,12 +161,12 @@ func (fs *FileStore) appendRecord(sessionID, filename string, record *model.Reco
 	return err
 }
 
-// ListRecords 读取会话的所有录制记录
+// ListRecords reads all recorded records for a session
 func (fs *FileStore) ListRecords(sessionID string) ([]model.Record, error) {
 	return fs.listRecords(sessionID, "records.jsonl")
 }
 
-// ListReplayRecords 读取会话的所有回放记录
+// ListReplayRecords reads all replay records for a session
 func (fs *FileStore) ListReplayRecords(sessionID string) ([]model.Record, error) {
 	return fs.listRecords(sessionID, "replay-records.jsonl")
 }
@@ -187,7 +187,7 @@ func (fs *FileStore) listRecords(sessionID, filename string) ([]model.Record, er
 
 	var records []model.Record
 	scanner := bufio.NewScanner(f)
-	scanner.Buffer(make([]byte, 0, 1024*1024), 10*1024*1024) // 最大 10MB 单行
+	scanner.Buffer(make([]byte, 0, 1024*1024), 10*1024*1024) // max 10MB per line
 	for scanner.Scan() {
 		line := scanner.Bytes()
 		if len(line) == 0 {
@@ -195,14 +195,14 @@ func (fs *FileStore) listRecords(sessionID, filename string) ([]model.Record, er
 		}
 		var rec model.Record
 		if err := json.Unmarshal(line, &rec); err != nil {
-			continue // 跳过损坏的行
+			continue // skip corrupted lines
 		}
 		records = append(records, rec)
 	}
 	return records, scanner.Err()
 }
 
-// GetRecord 获取单条记录
+// GetRecord retrieves a single record
 func (fs *FileStore) GetRecord(sessionID string, recordID string) (*model.Record, error) {
 	records, err := fs.ListRecords(sessionID)
 	if err != nil {
@@ -216,7 +216,7 @@ func (fs *FileStore) GetRecord(sessionID string, recordID string) (*model.Record
 	return nil, fmt.Errorf("record %s not found", recordID)
 }
 
-// CountRecords 返回会话的记录数
+// CountRecords returns the number of records in a session
 func (fs *FileStore) CountRecords(sessionID string) (int, error) {
 	records, err := fs.ListRecords(sessionID)
 	if err != nil {
@@ -225,9 +225,9 @@ func (fs *FileStore) CountRecords(sessionID string) (int, error) {
 	return len(records), nil
 }
 
-// --- DiffStore 实现 ---
+// --- DiffStore implementation ---
 
-// SaveResults 保存对拍结果
+// SaveResults saves diff results
 func (fs *FileStore) SaveResults(sessionID string, results []model.DiffResult) error {
 	fs.mu.Lock()
 	defer fs.mu.Unlock()
@@ -240,7 +240,7 @@ func (fs *FileStore) SaveResults(sessionID string, results []model.DiffResult) e
 	return os.WriteFile(path, data, 0644)
 }
 
-// LoadResults 加载对拍结果
+// LoadResults loads diff results
 func (fs *FileStore) LoadResults(sessionID string) ([]model.DiffResult, error) {
 	fs.mu.RLock()
 	defer fs.mu.RUnlock()
@@ -261,7 +261,7 @@ func (fs *FileStore) LoadResults(sessionID string) ([]model.DiffResult, error) {
 	return results, nil
 }
 
-// --- 内部方法 ---
+// --- Internal methods ---
 
 func (fs *FileStore) loadSession(id string) (*model.Session, error) {
 	path := filepath.Join(fs.baseDir, id, "session.json")

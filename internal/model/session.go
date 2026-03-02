@@ -1,21 +1,21 @@
 package model
 
-// Session 表示一次完整的录制会话，包含一组相关的 API 调用记录
+// Session represents a complete recording session containing a set of related API call records
 type Session struct {
-	ID          string            `json:"id"`          // UUID 短 ID (8 字符)
-	Name        string            `json:"name"`        // 用户自定义名称
-	Description string            `json:"description"` // 会话描述
-	Source      EndpointConfig    `json:"source"`      // 源端配置 (被录制的服务)
-	Target      EndpointConfig    `json:"target"`      // 目标端配置 (回放目标)
-	Tags        []string          `json:"tags"`        // 标签，用于过滤
-	RecordCount int               `json:"recordCount"` // 记录数量
-	CreatedAt   int64             `json:"createdAt"`   // 创建时间 (Unix ms)
-	UpdatedAt   int64             `json:"updatedAt"`   // 更新时间 (Unix ms)
+	ID          string            `json:"id"`          // UUID short ID (8 characters)
+	Name        string            `json:"name"`        // User-defined name
+	Description string            `json:"description"` // Session description
+	Source      EndpointConfig    `json:"source"`      // Source endpoint config (the service being recorded)
+	Target      EndpointConfig    `json:"target"`      // Target endpoint config (replay target)
+	Tags        []string          `json:"tags"`        // Tags for filtering
+	RecordCount int               `json:"recordCount"` // Number of records
+	CreatedAt   int64             `json:"createdAt"`   // Creation time (Unix ms)
+	UpdatedAt   int64             `json:"updatedAt"`   // Update time (Unix ms)
 	Status      SessionStatus     `json:"status"`      // recording / completed / replayed
-	Metadata    map[string]string `json:"metadata"`    // 扩展元数据
+	Metadata    map[string]string `json:"metadata"`    // Extended metadata
 }
 
-// SessionStatus 会话状态
+// SessionStatus represents the session status
 type SessionStatus string
 
 const (
@@ -24,15 +24,15 @@ const (
 	SessionReplayed  SessionStatus = "replayed"
 )
 
-// EndpointConfig 端点配置
+// EndpointConfig represents an endpoint configuration
 type EndpointConfig struct {
 	BaseURL string            `json:"baseURL"` // e.g. "http://localhost:8080"
-	Headers map[string]string `json:"headers"` // 默认附加头
+	Headers map[string]string `json:"headers"` // Default additional headers
 }
 
-// SessionFilter 会话过滤条件
+// SessionFilter represents session filter criteria
 type SessionFilter struct {
-	Name   string   `json:"name,omitempty"`   // 名称模糊匹配
-	Status string   `json:"status,omitempty"` // 状态过滤
-	Tags   []string `json:"tags,omitempty"`   // 标签过滤
+	Name   string   `json:"name,omitempty"`   // Fuzzy match on name
+	Status string   `json:"status,omitempty"` // Filter by status
+	Tags   []string `json:"tags,omitempty"`   // Filter by tags
 }

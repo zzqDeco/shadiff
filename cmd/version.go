@@ -6,7 +6,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// 构建时注入的版本信息
+// Build-time injected version info
 var (
 	Version   = "0.1.0"
 	Commit    = "dev"
@@ -15,7 +15,7 @@ var (
 
 var versionCmd = &cobra.Command{
 	Use:   "version",
-	Short: "显示版本信息",
+	Short: "Show version info",
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Printf("shadiff %s\n", Version)
 		fmt.Printf("  commit:  %s\n", Commit)

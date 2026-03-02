@@ -8,7 +8,7 @@ import (
 	"shadiff/internal/model"
 )
 
-// HTMLReporter HTML 报告生成器
+// HTMLReporter generates reports in HTML format
 type HTMLReporter struct{}
 
 func (r *HTMLReporter) Generate(results []model.DiffResult, summary model.DiffSummary, w io.Writer) error {
@@ -43,7 +43,7 @@ func (r *HTMLReporter) Generate(results []model.DiffResult, summary model.DiffSu
 }
 
 const htmlTemplate = `<!DOCTYPE html>
-<html lang="zh">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <title>Shadiff Report</title>
@@ -78,19 +78,19 @@ const htmlTemplate = `<!DOCTYPE html>
 <div class="summary">
   <div class="stat">
     <div class="value">{{.Summary.TotalCount}}</div>
-    <div class="label">总记录</div>
+    <div class="label">Total Records</div>
   </div>
   <div class="stat">
     <div class="value" style="color:#22c55e">{{.Summary.MatchCount}}</div>
-    <div class="label">匹配</div>
+    <div class="label">Matched</div>
   </div>
   <div class="stat">
     <div class="value" style="color:#ef4444">{{.Summary.DiffCount}}</div>
-    <div class="label">差异</div>
+    <div class="label">Differences</div>
   </div>
   <div class="stat">
     <div class="value match-rate">{{pct .Summary.MatchRate}}%</div>
-    <div class="label">匹配率</div>
+    <div class="label">Match Rate</div>
   </div>
 </div>
 
@@ -107,7 +107,7 @@ const htmlTemplate = `<!DOCTYPE html>
     {{range .Differences}}
     <div class="diff-item {{if .Ignored}}ignored{{end}}">
       {{if .Ignored}}
-        <span class="path">{{.Path}}</span>: 忽略 ({{.Rule}})
+        <span class="path">{{.Path}}</span>: ignored ({{.Rule}})
       {{else}}
         <span class="path">{{.Path}}</span>: {{.Expected}} ≠ {{.Actual}}
         <span class="severity {{severityClass .Severity}}">{{.Severity}}</span>

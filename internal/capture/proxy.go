@@ -15,7 +15,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// Proxy HTTP 反向代理，透明转发请求并捕获请求/响应
+// Proxy is an HTTP reverse proxy that transparently forwards requests and captures request/response pairs
 type Proxy struct {
 	target   *url.URL
 	proxy    *httputil.ReverseProxy
@@ -23,7 +23,7 @@ type Proxy struct {
 	sequence atomic.Int64
 }
 
-// NewProxy 创建反向代理实例
+// NewProxy creates a reverse proxy instance
 func NewProxy(targetURL string, recorder *Recorder) (*Proxy, error) {
 	target, err := url.Parse(targetURL)
 	if err != nil {
@@ -42,19 +42,19 @@ func NewProxy(targetURL string, recorder *Recorder) (*Proxy, error) {
 	return p, nil
 }
 
-// ServeHTTP 实现 http.Handler 接口
+// ServeHTTP implements the http.Handler interface
 func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	startTime := time.Now()
 	seq := int(p.sequence.Add(1))
 
-	// 读取请求 body
+	// Read request body
 	var reqBody []byte
 	if r.Body != nil {
 		reqBody, _ = io.ReadAll(r.Body)
 		r.Body = io.NopCloser(bytes.NewReader(reqBody))
 	}
 
-	// 构造 HTTPRequest
+	// Build HTTPRequest
 	httpReq := model.HTTPRequest{
 		Method:  r.Method,
 		Path:    r.URL.Path,
@@ -64,7 +64,7 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		BodyLen: int64(len(reqBody)),
 	}
 
-	// 使用 ResponseRecorder 捕获响应
+	// Use ResponseRecorder to capture the response
 	rr := &responseRecorder{
 		ResponseWriter: w,
 		statusCode:     http.StatusOK,
@@ -74,7 +74,7 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	duration := time.Since(startTime).Milliseconds()
 
-	// 构造 HTTPResponse
+	// Build HTTPResponse
 	httpResp := model.HTTPResponse{
 		StatusCode: rr.statusCode,
 		Headers:    cloneHeaders(rr.Header()),
@@ -82,7 +82,7 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		BodyLen:    int64(rr.body.Len()),
 	}
 
-	// 构造 Record 并交给 recorder
+	// Build Record and pass it to the recorder
 	record := &model.Record{
 		ID:          uuid.New().String()[:8],
 		Sequence:    seq,
@@ -106,14 +106,14 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	)
 }
 
-// director 修改请求目标为被代理的服务
+// director modifies the request target to the proxied service
 func (p *Proxy) director(req *http.Request) {
 	req.URL.Scheme = p.target.Scheme
 	req.URL.Host = p.target.Host
 	req.Host = p.target.Host
 }
 
-// responseRecorder 捕获响应内容的 ResponseWriter 包装器
+// responseRecorder is a ResponseWriter wrapper that captures response content
 type responseRecorder struct {
 	http.ResponseWriter
 	statusCode int
@@ -134,7 +134,7 @@ func (rr *responseRecorder) Write(b []byte) (int, error) {
 	return rr.ResponseWriter.Write(b)
 }
 
-// cloneHeaders 深拷贝 HTTP headers
+// cloneHeaders deep-copies HTTP headers
 func cloneHeaders(h http.Header) map[string][]string {
 	if h == nil {
 		return nil

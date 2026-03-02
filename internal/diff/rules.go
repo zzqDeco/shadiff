@@ -9,29 +9,29 @@ import (
 	"shadiff/internal/model"
 )
 
-// Matcher 自定义匹配器接口
+// Matcher is a custom matcher interface
 type Matcher interface {
 	Name() string
 	Match(path string, expected, actual any) (match bool, err error)
 }
 
-// Rule 对拍规则
+// Rule is a diff rule
 type Rule struct {
-	Name    string   `json:"name" yaml:"name"`       // 规则名
+	Name    string   `json:"name" yaml:"name"`       // rule name
 	Kind    string   `json:"kind" yaml:"kind"`       // ignore / custom
-	Paths   []string `json:"paths" yaml:"paths"`     // 匹配的 JSON 路径 (支持 * 通配)
-	Pattern string   `json:"pattern" yaml:"pattern"` // 值正则匹配 (可选)
-	Matcher string   `json:"matcher" yaml:"matcher"` // 自定义匹配器名 (可选)
+	Paths   []string `json:"paths" yaml:"paths"`     // JSON paths to match (supports * wildcard)
+	Pattern string   `json:"pattern" yaml:"pattern"` // value regex match (optional)
+	Matcher string   `json:"matcher" yaml:"matcher"` // custom matcher name (optional)
 }
 
-// RuleSet 规则集合
+// RuleSet is a collection of rules
 type RuleSet struct {
 	Rules    []Rule
 	matchers map[string]Matcher
-	compiled map[string]*regexp.Regexp // 预编译路径模式
+	compiled map[string]*regexp.Regexp // pre-compiled path patterns
 }
 
-// NewRuleSet 创建规则集
+// NewRuleSet creates a rule set
 func NewRuleSet(rules []Rule, matchers ...Matcher) *RuleSet {
 	rs := &RuleSet{
 		Rules:    rules,
@@ -43,7 +43,7 @@ func NewRuleSet(rules []Rule, matchers ...Matcher) *RuleSet {
 		rs.matchers[m.Name()] = m
 	}
 
-	// 预编译路径通配模式
+	// Pre-compile path wildcard patterns
 	for _, r := range rules {
 		for _, p := range r.Paths {
 			pattern := pathToRegexp(p)
@@ -54,7 +54,7 @@ func NewRuleSet(rules []Rule, matchers ...Matcher) *RuleSet {
 	return rs
 }
 
-// Apply 对差异应用规则，标记被忽略的差异
+// Apply applies rules to differences and marks ignored differences
 func (rs *RuleSet) Apply(diffs []model.Difference) []model.Difference {
 	for i := range diffs {
 		for _, rule := range rs.Rules {
@@ -78,7 +78,7 @@ func (rs *RuleSet) Apply(diffs []model.Difference) []model.Difference {
 	return diffs
 }
 
-// matchesPath 检查差异路径是否匹配规则中的任一路径模式
+// matchesPath checks whether the diff path matches any path pattern in the rule
 func (rs *RuleSet) matchesPath(rule Rule, diffPath string) bool {
 	for _, p := range rule.Paths {
 		if re, ok := rs.compiled[p]; ok {
@@ -90,26 +90,26 @@ func (rs *RuleSet) matchesPath(rule Rule, diffPath string) bool {
 	return false
 }
 
-// pathToRegexp 将路径通配模式转为正则
-// 支持: * 匹配单级, ** 匹配多级, [*] 匹配数组下标
+// pathToRegexp converts a path wildcard pattern to a regex
+// Supports: * matches single level, ** matches multiple levels, [*] matches array index
 func pathToRegexp(pattern string) string {
-	// 转义正则特殊字符
+	// Escape regex special characters
 	escaped := regexp.QuoteMeta(pattern)
-	// 恢复通配符
+	// Restore wildcards
 	escaped = strings.ReplaceAll(escaped, `\*\*`, `.*`)
 	escaped = strings.ReplaceAll(escaped, `\*`, `[^.]*`)
 	escaped = strings.ReplaceAll(escaped, `\[\*\]`, `\[\d+\]`)
 	return "^" + escaped + "$"
 }
 
-// --- 内置匹配器 ---
+// --- Built-in matchers ---
 
-// TimestampMatcher 时间戳匹配器，忽略时间戳类字段
+// TimestampMatcher is a timestamp matcher that ignores timestamp-like fields
 type TimestampMatcher struct{}
 
 func (TimestampMatcher) Name() string { return "timestamp" }
 func (TimestampMatcher) Match(path string, expected, actual any) (bool, error) {
-	// 两边都是字符串且看起来像时间戳，认为匹配
+	// If both sides are strings and look like timestamps, consider them a match
 	es, eOk := expected.(string)
 	as, aOk := actual.(string)
 	if !eOk || !aOk {
@@ -118,7 +118,7 @@ func (TimestampMatcher) Match(path string, expected, actual any) (bool, error) {
 	return looksLikeTimestamp(es) && looksLikeTimestamp(as), nil
 }
 
-// UUIDMatcher UUID 匹配器，忽略 UUID 字段差异
+// UUIDMatcher is a UUID matcher that ignores UUID field differences
 type UUIDMatcher struct{}
 
 func (UUIDMatcher) Name() string { return "uuid" }
@@ -131,7 +131,7 @@ func (UUIDMatcher) Match(path string, expected, actual any) (bool, error) {
 	return looksLikeUUID(es) && looksLikeUUID(as), nil
 }
 
-// NumericToleranceMatcher 数值容差匹配器
+// NumericToleranceMatcher is a numeric tolerance matcher
 type NumericToleranceMatcher struct {
 	Tolerance float64
 }
@@ -150,7 +150,7 @@ func (m NumericToleranceMatcher) Match(path string, expected, actual any) (bool,
 	return diff <= m.Tolerance, nil
 }
 
-// --- 辅助函数 ---
+// --- Helper functions ---
 
 var (
 	timestampRe = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}`)
@@ -182,7 +182,7 @@ func toFloat64(v any) (float64, bool) {
 	return 0, false
 }
 
-// DefaultRules 返回默认规则集
+// DefaultRules returns the default rule set
 func DefaultRules() *RuleSet {
 	rules := []Rule{
 		{
@@ -205,7 +205,7 @@ func DefaultRules() *RuleSet {
 	)
 }
 
-// DefaultIgnoreHeaders 默认忽略的响应 header
+// DefaultIgnoreHeaders returns the default response headers to ignore
 func DefaultIgnoreHeaders() []string {
 	return []string{
 		"Date", "X-Request-Id", "X-Trace-Id",
@@ -213,7 +213,7 @@ func DefaultIgnoreHeaders() []string {
 	}
 }
 
-// FormatDiffSummary 格式化差异摘要
+// FormatDiffSummary formats a diff summary
 func FormatDiffSummary(results []model.DiffResult) model.DiffSummary {
 	summary := model.DiffSummary{
 		TotalCount: len(results),
@@ -241,7 +241,7 @@ func FormatDiffSummary(results []model.DiffResult) model.DiffSummary {
 	return summary
 }
 
-// FormatPath 格式化差异路径
+// FormatPath formats a diff path
 func FormatPath(prefix string, parts ...string) string {
 	result := prefix
 	for _, p := range parts {

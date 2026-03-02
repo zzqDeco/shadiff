@@ -1,14 +1,14 @@
 package model
 
-// Record 表示单次 API 调用的完整行为，包括输入、输出和副作用
+// Record represents the complete behavior of a single API call, including input, output, and side effects
 type Record struct {
-	ID          string       `json:"id"`          // 记录唯一 ID
-	SessionID   string       `json:"sessionID"`   // 所属会话
-	Sequence    int          `json:"sequence"`     // 会话内序号，用于配对
-	Request     HTTPRequest  `json:"request"`      // HTTP 请求
-	Response    HTTPResponse `json:"response"`     // HTTP 响应
-	SideEffects []SideEffect `json:"sideEffects"`  // 副作用列表
-	Duration    int64        `json:"duration"`     // 请求耗时 (ms)
-	RecordedAt  int64        `json:"recordedAt"`   // 录制时间 (Unix ms)
-	Error       string       `json:"error,omitempty"` // 采集错误信息
+	ID          string       `json:"id"`          // Unique record ID
+	SessionID   string       `json:"sessionID"`   // Owning session
+	Sequence    int          `json:"sequence"`     // Sequence number within session, used for pairing
+	Request     HTTPRequest  `json:"request"`      // HTTP request
+	Response    HTTPResponse `json:"response"`     // HTTP response
+	SideEffects []SideEffect `json:"sideEffects"`  // List of side effects
+	Duration    int64        `json:"duration"`     // Request duration (ms)
+	RecordedAt  int64        `json:"recordedAt"`   // Recording time (Unix ms)
+	Error       string       `json:"error,omitempty"` // Collection error message
 }

@@ -6,26 +6,26 @@ import (
 	"shadiff/internal/model"
 )
 
-// DBHook 数据库操作捕获接口
+// DBHook is the interface for capturing database operations
 type DBHook interface {
-	// Start 启动数据库代理，监听 listenAddr，转发到 targetAddr
+	// Start starts the database proxy, listening on listenAddr and forwarding to targetAddr
 	Start(ctx context.Context) error
-	// Stop 停止代理
+	// Stop stops the proxy
 	Stop() error
-	// SideEffects 返回捕获的副作用通道
+	// SideEffects returns the channel of captured side effects
 	SideEffects() <-chan model.SideEffect
-	// Type 返回数据库类型
+	// Type returns the database type
 	Type() string
 }
 
-// Config DB 代理通用配置
+// Config is the common configuration for DB proxies
 type Config struct {
 	DBType     string // mysql / postgres / mongo
-	ListenAddr string // 代理监听地址
-	TargetAddr string // 真实 DB 地址
+	ListenAddr string // proxy listen address
+	TargetAddr string // real DB address
 }
 
-// NewHook 根据类型创建对应的 DB hook
+// NewHook creates the corresponding DB hook based on the type
 func NewHook(cfg Config) (DBHook, error) {
 	switch cfg.DBType {
 	case "mysql":
@@ -39,11 +39,11 @@ func NewHook(cfg Config) (DBHook, error) {
 	}
 }
 
-// UnsupportedDBError 不支持的数据库类型
+// UnsupportedDBError represents an unsupported database type error
 type UnsupportedDBError struct {
 	DBType string
 }
 
 func (e *UnsupportedDBError) Error() string {
-	return "不支持的数据库类型: " + e.DBType
+	return "unsupported database type: " + e.DBType
 }

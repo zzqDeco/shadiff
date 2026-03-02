@@ -14,14 +14,14 @@ import (
 	"github.com/google/uuid"
 )
 
-// WorkerPool 并发回放工作池
+// WorkerPool is a concurrent replay worker pool
 type WorkerPool struct {
 	concurrency int
 	client      *http.Client
 	transform   TransformConfig
 }
 
-// NewWorkerPool 创建工作池
+// NewWorkerPool creates a new worker pool
 func NewWorkerPool(concurrency int, timeout time.Duration, transform TransformConfig) *WorkerPool {
 	return &WorkerPool{
 		concurrency: concurrency,
@@ -32,19 +32,19 @@ func NewWorkerPool(concurrency int, timeout time.Duration, transform TransformCo
 	}
 }
 
-// ReplayResult 单次回放结果
+// ReplayResult holds the result of a single replay
 type ReplayResult struct {
-	Original model.Record // 原始录制记录
-	Replayed model.Record // 回放得到的记录
-	Error    error        // 回放错误
+	Original model.Record // original recorded record
+	Replayed model.Record // record obtained from replay
+	Error    error        // replay error
 }
 
-// Execute 并发回放一批记录
+// Execute replays a batch of records concurrently
 func (wp *WorkerPool) Execute(records []model.Record, delay time.Duration) []ReplayResult {
 	results := make([]ReplayResult, len(records))
 
 	if wp.concurrency <= 1 {
-		// 串行回放
+		// Sequential replay
 		for i, rec := range records {
 			results[i] = wp.replayOne(rec)
 			if delay > 0 && i < len(records)-1 {
@@ -54,7 +54,7 @@ func (wp *WorkerPool) Execute(records []model.Record, delay time.Duration) []Rep
 		return results
 	}
 
-	// 并发回放
+	// Concurrent replay
 	jobs := make(chan int, len(records))
 	var wg sync.WaitGroup
 
@@ -80,7 +80,7 @@ func (wp *WorkerPool) Execute(records []model.Record, delay time.Duration) []Rep
 	return results
 }
 
-// replayOne 回放单条记录
+// replayOne replays a single record
 func (wp *WorkerPool) replayOne(original model.Record) ReplayResult {
 	result := ReplayResult{Original: original}
 
@@ -108,7 +108,7 @@ func (wp *WorkerPool) replayOne(original model.Record) ReplayResult {
 	}
 	defer resp.Body.Close()
 
-	// 读取响应 body
+	// Read response body
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		result.Error = fmt.Errorf("read response body: %w", err)
@@ -138,7 +138,7 @@ func (wp *WorkerPool) replayOne(original model.Record) ReplayResult {
 		"duration_ms", duration,
 	)
 
-	// 将请求 body 复位以供后续使用
+	// Reset request body for subsequent use
 	_ = bytes.NewReader(original.Request.Body)
 
 	return result

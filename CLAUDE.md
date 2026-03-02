@@ -4,62 +4,62 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Shadiff 是一个影子流量语义对拍工具，用于跨框架/跨语言的 API 迁移验证。通过黑盒录制-回放-对拍三段式流程，验证新旧 API 行为是否一致。
+Shadiff is a shadow traffic semantic comparison tool for cross-framework / cross-language API migration validation. It uses a record-replay-diff three-stage pipeline to verify behavioral consistency between old and new APIs.
 
 ## Build & Development Commands
 
 ```bash
-go build -o shadiff .         # 编译
-go run . version               # 运行 version 命令
-go run . record --help          # 查看 record 命令帮助
-go test ./...                   # 运行所有测试
+go build -o shadiff .          # Build
+go run . version               # Run version command
+go run . record --help         # Show record command help
+go test ./...                  # Run all tests
 ```
 
 ## Tech Stack
 
 - **Language:** Go 1.24
-- **CLI Framework:** cobra
-- **Storage:** 文件系统 (JSONL), ~/.shadiff/
-- **Logging:** slog + 日志轮转
+- **CLI Framework:** Cobra
+- **Storage:** Filesystem (JSONL), ~/.shadiff/
+- **Logging:** slog + daily rotation
 
 ## Architecture
 
-### 核心工作流
+### Core Workflow
 
 ```
-record (录制) → replay (回放) → diff (对拍) → report (报告)
+record → replay → diff → report
 ```
 
-### 包结构
+### Package Structure
 
-| 包 | 职责 |
-|---|---|
-| `cmd/` | CLI 命令 (cobra) |
-| `internal/model/` | 核心数据模型: Session, Record, SideEffect, DiffResult |
-| `internal/config/` | 配置管理 (~/.shadiff/config.json) |
-| `internal/logger/` | 结构化 slog 日志 + 轮转 |
-| `internal/capture/` | HTTP 反向代理 + DB 协议代理采集 |
-| `internal/capture/dbhook/` | 数据库协议代理 (MySQL/PostgreSQL/MongoDB) |
-| `internal/storage/` | JSONL 文件存储 |
-| `internal/replay/` | 流量回放引擎 |
-| `internal/diff/` | 语义对拍引擎 |
-| `internal/reporter/` | 报告生成 (terminal/JSON/HTML) |
+| Package | Responsibility |
+|---------|---------------|
+| `cmd/` | CLI commands (Cobra) |
+| `internal/model/` | Core data models: Session, Record, SideEffect, DiffResult |
+| `internal/config/` | Configuration management (~/.shadiff/config.json) |
+| `internal/logger/` | Structured slog logging + rotation |
+| `internal/capture/` | HTTP reverse proxy + DB protocol proxy capture |
+| `internal/capture/dbhook/` | Database protocol proxies (MySQL/PostgreSQL/MongoDB) |
+| `internal/storage/` | JSONL file storage |
+| `internal/replay/` | Traffic replay engine |
+| `internal/diff/` | Semantic diff engine |
+| `internal/reporter/` | Report generation (terminal/JSON/HTML) |
 
-### 数据存储
+### Data Storage
 
-所有持久数据存储在 `~/.shadiff/`:
-- `config.json` — 全局配置
-- `sessions/{id}/session.json` — 会话元数据
-- `sessions/{id}/records.jsonl` — 录制记录 (JSONL 流式)
-- `sessions/{id}/replay-records.jsonl` — 回放记录
-- `sessions/{id}/diff-results.json` — 对拍结果
+All persistent data is stored under `~/.shadiff/`:
+- `config.json` — Global configuration
+- `sessions/{id}/session.json` — Session metadata
+- `sessions/{id}/records.jsonl` — Recorded behavior (JSONL streaming)
+- `sessions/{id}/replay-records.jsonl` — Replay records
+- `sessions/{id}/diff-results.json` — Diff results
 
 ## Key Conventions
 
-- Go 代码遵循标准 Go 惯例 (gofmt, effective Go)
-- 注释使用中文，标识符使用英文
-- 配置管理参考 starxo 的 config.Store 模式 (线程安全 JSON 读写)
-- 日志使用 slog + 日志轮转，参考 starxo logger 模式
+- Go code follows standard Go conventions (gofmt, effective Go)
+- Comments in English, identifiers in English
+- Config management follows starxo's config.Store pattern (thread-safe JSON read/write)
+- Logging uses slog + daily rotation, following starxo's logger pattern
 
 ## Engineering Conventions
 
@@ -75,10 +75,10 @@ Scopes: `model`, `config`, `capture`, `dbhook`, `storage`, `replay`, `diff`, `re
 
 ### Development Workflow
 
-1. **Plan** — 在 `plan/` 创建计划文档
-2. **Implement** — 在 feature 分支上实现
-3. **Verify** — 端到端测试
-4. **Commit** — Conventional Commits 格式
+1. **Plan** — Create plan documents in `plan/`
+2. **Implement** — Develop on feature branch
+3. **Verify** — End-to-end testing
+4. **Commit** — Conventional Commits format
 
 ### Testing
 

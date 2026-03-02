@@ -13,7 +13,7 @@ import (
 	"shadiff/internal/model"
 )
 
-// MongoHook MongoDB 协议代理，解析 OP_MSG Wire Protocol
+// MongoHook is a MongoDB protocol proxy that parses the OP_MSG Wire Protocol
 type MongoHook struct {
 	listenAddr  string
 	targetAddr  string
@@ -23,7 +23,7 @@ type MongoHook struct {
 	wg          sync.WaitGroup
 }
 
-// MongoDB Wire Protocol 常量
+// MongoDB Wire Protocol constants
 const (
 	opMsgOpCode = 2013 // OP_MSG
 )
@@ -106,14 +106,14 @@ func (h *MongoHook) handleConn(clientConn net.Conn) {
 
 	var wg sync.WaitGroup
 
-	// 服务端 -> 客户端（透传）
+	// Server -> Client (passthrough)
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		io.Copy(clientConn, serverConn)
 	}()
 
-	// 客户端 -> 服务端（嗅探）
+	// Client -> Server (sniff)
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -125,7 +125,7 @@ func (h *MongoHook) handleConn(clientConn net.Conn) {
 
 func (h *MongoHook) sniffClientToServer(client, server net.Conn) {
 	for {
-		// MongoDB Wire Protocol 头: 4字节消息长度 (little-endian)
+		// MongoDB Wire Protocol header: 4-byte message length (little-endian)
 		header := make([]byte, 16)
 		if _, err := io.ReadFull(client, header); err != nil {
 			return
@@ -136,10 +136,10 @@ func (h *MongoHook) sniffClientToServer(client, server net.Conn) {
 		// responseTo := binary.LittleEndian.Uint32(header[8:12])
 		opCode := int(binary.LittleEndian.Uint32(header[12:16]))
 
-		// 读取剩余消息体
+		// Read remaining message body
 		remaining := msgLen - 16
 		if remaining < 0 || remaining > 16*1024*1024 {
-			// 无效消息长度，转发 header 然后回退到透传
+			// Invalid message length, forward header then fall back to passthrough
 			server.Write(header)
 			io.Copy(server, client)
 			return
@@ -151,18 +151,18 @@ func (h *MongoHook) sniffClientToServer(client, server net.Conn) {
 			return
 		}
 
-		// 转发完整消息
+		// Forward the complete message
 		server.Write(header)
 		server.Write(body)
 
-		// 尝试解析 OP_MSG
+		// Try to parse OP_MSG
 		if opCode == opMsgOpCode {
 			h.parseOpMsg(body)
 		}
 	}
 }
 
-// parseOpMsg 解析 MongoDB OP_MSG 消息
+// parseOpMsg parses a MongoDB OP_MSG message
 func (h *MongoHook) parseOpMsg(body []byte) {
 	if len(body) < 5 {
 		return
@@ -210,11 +210,11 @@ func (h *MongoHook) parseOpMsg(body []byte) {
 	}
 }
 
-// extractMongoCommand 从 BSON 文档中提取 MongoDB 命令信息
-// 简化实现：将 BSON 转为 JSON 解析以提取命令类型和参数
+// extractMongoCommand extracts MongoDB command information from a BSON document.
+// Simplified implementation: converts BSON to JSON-parseable format to extract command type and parameters.
 func (h *MongoHook) extractMongoCommand(bsonDoc []byte) {
-	// 简化处理：尝试用简单的 BSON 解析提取第一个 key-value
-	// 完整的 BSON 解析需要依赖 bson 库，这里做基本提取
+	// Simplified handling: try basic BSON parsing to extract the first key-value pair.
+	// Full BSON parsing requires the bson library; here we do basic extraction.
 	doc := simpleBSONToMap(bsonDoc)
 	if doc == nil {
 		return
@@ -226,14 +226,14 @@ func (h *MongoHook) extractMongoCommand(bsonDoc []byte) {
 		Timestamp: time.Now().UnixMilli(),
 	}
 
-	// 提取数据库名
+	// Extract database name
 	if db, ok := doc["$db"]; ok {
 		if dbStr, ok := db.(string); ok {
 			effect.Database = dbStr
 		}
 	}
 
-	// 识别命令类型和集合名
+	// Identify command type and collection name
 	mongoCommands := []string{"find", "insert", "update", "delete", "aggregate", "count", "distinct", "findAndModify"}
 	for _, cmd := range mongoCommands {
 		if coll, ok := doc[cmd]; ok {
@@ -246,20 +246,20 @@ func (h *MongoHook) extractMongoCommand(bsonDoc []byte) {
 	}
 
 	if effect.Operation == "" {
-		return // 非 CRUD 命令，跳过
+		return // Not a CRUD command, skip
 	}
 
-	// 提取过滤条件
+	// Extract filter conditions
 	if filter, ok := doc["filter"]; ok {
 		effect.Filter = filter
 	}
 
-	// 提取更新操作
+	// Extract update operations
 	if update, ok := doc["updates"]; ok {
 		effect.Update = update
 	}
 
-	// 提取插入文档
+	// Extract inserted documents
 	if docs, ok := doc["documents"]; ok {
 		effect.Documents = docs
 	}
@@ -271,8 +271,8 @@ func (h *MongoHook) extractMongoCommand(bsonDoc []byte) {
 	}
 }
 
-// simpleBSONToMap 简化的 BSON 解析，提取字符串类型的 key-value
-// 完整实现应使用 go.mongodb.org/mongo-driver/bson，这里做基础提取
+// simpleBSONToMap is a simplified BSON parser that extracts key-value pairs with string type.
+// A full implementation should use go.mongodb.org/mongo-driver/bson; this does basic extraction.
 func simpleBSONToMap(data []byte) map[string]any {
 	if len(data) < 5 {
 		return nil
@@ -293,7 +293,7 @@ func simpleBSONToMap(data []byte) map[string]any {
 		elemType := data[offset]
 		offset++
 
-		// 读取 key (C string)
+		// Read key (C string)
 		keyEnd := offset
 		for keyEnd < len(data) && data[keyEnd] != 0 {
 			keyEnd++
@@ -325,7 +325,7 @@ func simpleBSONToMap(data []byte) map[string]any {
 			if offset+subDocLen > len(data) {
 				return result
 			}
-			// 尝试将子文档转为 JSON 友好格式
+			// Try to convert sub-document to a JSON-friendly format
 			subMap := simpleBSONToMap(data[offset : offset+subDocLen])
 			if subMap != nil {
 				result[key] = subMap
@@ -350,7 +350,7 @@ func simpleBSONToMap(data []byte) map[string]any {
 			if offset+8 > len(data) {
 				return result
 			}
-			offset += 8 // 跳过 double
+			offset += 8 // skip double
 
 		case 0x08: // boolean
 			if offset >= len(data) {
@@ -369,7 +369,7 @@ func simpleBSONToMap(data []byte) map[string]any {
 			offset += 12
 
 		default:
-			// 未知类型，无法继续解析
+			// Unknown type, cannot continue parsing
 			return result
 		}
 	}
@@ -377,7 +377,7 @@ func simpleBSONToMap(data []byte) map[string]any {
 	return result
 }
 
-// MongoCommandToJSON 将 MongoDB 命令转为可读的 JSON 字符串（用于日志和报告）
+// MongoCommandToJSON converts a MongoDB command to a readable JSON string (for logging and reporting)
 func MongoCommandToJSON(effect model.SideEffect) string {
 	cmd := map[string]any{
 		"operation":  effect.Operation,

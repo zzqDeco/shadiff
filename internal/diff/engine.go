@@ -8,7 +8,7 @@ import (
 	"shadiff/internal/storage"
 )
 
-// Engine 对拍引擎，比较录制和回放记录的行为差异
+// Engine is the diff engine that compares behavioral differences between recorded and replayed records
 type Engine struct {
 	store       *storage.FileStore
 	sessionID   string
@@ -17,7 +17,7 @@ type Engine struct {
 	ignoreHeaders map[string]bool
 }
 
-// EngineConfig 对拍引擎配置
+// EngineConfig is the diff engine configuration
 type EngineConfig struct {
 	SessionID     string
 	Rules         []Rule
@@ -25,9 +25,9 @@ type EngineConfig struct {
 	IgnoreHeaders []string
 }
 
-// NewEngine 创建对拍引擎
+// NewEngine creates a diff engine
 func NewEngine(store *storage.FileStore, cfg EngineConfig) *Engine {
-	// 构建忽略 header 集合
+	// Build the set of headers to ignore
 	ignoreHeaders := make(map[string]bool)
 	for _, h := range DefaultIgnoreHeaders() {
 		ignoreHeaders[h] = true
@@ -36,7 +36,7 @@ func NewEngine(store *storage.FileStore, cfg EngineConfig) *Engine {
 		ignoreHeaders[h] = true
 	}
 
-	// 合并默认规则和自定义规则
+	// Merge default rules with custom rules
 	allRules := cfg.Rules
 	ruleSet := NewRuleSet(allRules,
 		TimestampMatcher{},
@@ -53,28 +53,28 @@ func NewEngine(store *storage.FileStore, cfg EngineConfig) *Engine {
 	}
 }
 
-// Run 执行对拍，返回差异结果列表
+// Run executes the diff comparison and returns a list of diff results
 func (e *Engine) Run() ([]model.DiffResult, error) {
-	// 读取录制记录
+	// Load recorded records
 	originals, err := e.store.ListRecords(e.sessionID)
 	if err != nil {
-		return nil, fmt.Errorf("读取录制记录失败: %w", err)
+		return nil, fmt.Errorf("failed to load recorded records: %w", err)
 	}
 
-	// 读取回放记录
+	// Load replay records
 	replays, err := e.store.ListReplayRecords(e.sessionID)
 	if err != nil {
-		return nil, fmt.Errorf("读取回放记录失败: %w", err)
+		return nil, fmt.Errorf("failed to load replay records: %w", err)
 	}
 
 	if len(originals) == 0 {
-		return nil, fmt.Errorf("会话 %s 没有录制记录", e.sessionID)
+		return nil, fmt.Errorf("session %s has no recorded records", e.sessionID)
 	}
 	if len(replays) == 0 {
-		return nil, fmt.Errorf("会话 %s 没有回放记录，请先执行 replay", e.sessionID)
+		return nil, fmt.Errorf("session %s has no replay records, please run replay first", e.sessionID)
 	}
 
-	// 按序号建立回放记录索引
+	// Build replay record index by sequence number
 	replayMap := make(map[int]model.Record, len(replays))
 	for _, r := range replays {
 		replayMap[r.Sequence] = r
@@ -86,7 +86,7 @@ func (e *Engine) Run() ([]model.DiffResult, error) {
 		"replay_count", len(replays),
 	)
 
-	// 逐条对拍
+	// Compare records one by one
 	var results []model.DiffResult
 	for _, orig := range originals {
 		replay, exists := replayMap[orig.Sequence]
@@ -99,7 +99,7 @@ func (e *Engine) Run() ([]model.DiffResult, error) {
 				Differences: []model.Difference{{
 					Kind:     model.DiffBody,
 					Path:     "",
-					Message:  "回放记录缺失",
+					Message:  "replay record missing",
 					Severity: model.SeverityError,
 				}},
 			})
@@ -110,7 +110,7 @@ func (e *Engine) Run() ([]model.DiffResult, error) {
 		results = append(results, result)
 	}
 
-	// 保存结果
+	// Save results
 	if err := e.store.SaveResults(e.sessionID, results); err != nil {
 		logger.Error("save diff results failed", err)
 	}
@@ -123,47 +123,47 @@ func (e *Engine) Run() ([]model.DiffResult, error) {
 	return results, nil
 }
 
-// compareRecords 比较一对录制/回放记录
+// compareRecords compares a pair of recorded/replayed records
 func (e *Engine) compareRecords(original, replay model.Record) model.DiffResult {
 	var diffs []model.Difference
 
-	// 1. 比较状态码
+	// 1. Compare status codes
 	if original.Response.StatusCode != replay.Response.StatusCode {
 		diffs = append(diffs, model.Difference{
 			Kind:     model.DiffStatusCode,
 			Path:     "statusCode",
 			Expected: original.Response.StatusCode,
 			Actual:   replay.Response.StatusCode,
-			Message:  fmt.Sprintf("状态码不同: %d vs %d", original.Response.StatusCode, replay.Response.StatusCode),
+			Message:  fmt.Sprintf("status code differs: %d vs %d", original.Response.StatusCode, replay.Response.StatusCode),
 			Severity: model.SeverityError,
 		})
 	}
 
-	// 2. 比较响应 headers
+	// 2. Compare response headers
 	diffs = append(diffs, e.compareHeaders(original.Response.Headers, replay.Response.Headers)...)
 
-	// 3. 比较响应 body (JSON 结构化对比)
+	// 3. Compare response body (JSON structured diff)
 	if len(original.Response.Body) > 0 || len(replay.Response.Body) > 0 {
 		bodyDiffs := e.jsonDiffer.Compare(original.Response.Body, replay.Response.Body)
 		diffs = append(diffs, bodyDiffs...)
 	}
 
-	// 4. 比较副作用 (DB 操作数量)
+	// 4. Compare side effects (DB operation count)
 	if len(original.SideEffects) != len(replay.SideEffects) {
 		diffs = append(diffs, model.Difference{
 			Kind:     model.DiffDBQueryCount,
 			Path:     "sideEffects",
 			Expected: len(original.SideEffects),
 			Actual:   len(replay.SideEffects),
-			Message:  fmt.Sprintf("副作用数量不同: %d vs %d", len(original.SideEffects), len(replay.SideEffects)),
+			Message:  fmt.Sprintf("side effect count differs: %d vs %d", len(original.SideEffects), len(replay.SideEffects)),
 			Severity: model.SeverityError,
 		})
 	}
 
-	// 应用规则
+	// Apply rules
 	diffs = e.ruleSet.Apply(diffs)
 
-	// 判断是否匹配（忽略被规则标记的差异）
+	// Determine match (ignore differences marked by rules)
 	match := true
 	for _, d := range diffs {
 		if !d.Ignored {
@@ -181,7 +181,7 @@ func (e *Engine) compareRecords(original, replay model.Record) model.DiffResult 
 	}
 }
 
-// compareHeaders 比较响应 headers
+// compareHeaders compares response headers
 func (e *Engine) compareHeaders(expected, actual map[string][]string) []model.Difference {
 	var diffs []model.Difference
 
@@ -196,7 +196,7 @@ func (e *Engine) compareHeaders(expected, actual map[string][]string) []model.Di
 				Path:     fmt.Sprintf("headers.%s", k),
 				Expected: ev,
 				Actual:   nil,
-				Message:  fmt.Sprintf("响应 header 缺失: %s", k),
+				Message:  fmt.Sprintf("response header missing: %s", k),
 				Severity: model.SeverityWarning,
 			})
 		} else if fmt.Sprintf("%v", ev) != fmt.Sprintf("%v", av) {
@@ -205,7 +205,7 @@ func (e *Engine) compareHeaders(expected, actual map[string][]string) []model.Di
 				Path:     fmt.Sprintf("headers.%s", k),
 				Expected: ev,
 				Actual:   av,
-				Message:  fmt.Sprintf("响应 header 不同: %s", k),
+				Message:  fmt.Sprintf("response header differs: %s", k),
 				Severity: model.SeverityWarning,
 			})
 		}

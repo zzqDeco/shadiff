@@ -7,10 +7,10 @@ import (
 	"shadiff/internal/model"
 )
 
-// JSONReporter JSON 格式报告
+// JSONReporter generates reports in JSON format
 type JSONReporter struct{}
 
-// jsonReport JSON 报告结构
+// jsonReport is the JSON report structure
 type jsonReport struct {
 	Summary model.DiffSummary  `json:"summary"`
 	Results []model.DiffResult `json:"results"`

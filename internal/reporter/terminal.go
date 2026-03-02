@@ -7,7 +7,7 @@ import (
 	"shadiff/internal/model"
 )
 
-// TerminalReporter 终端彩色输出报告
+// TerminalReporter outputs colored reports to the terminal
 type TerminalReporter struct{}
 
 func (r *TerminalReporter) Generate(results []model.DiffResult, summary model.DiffSummary, w io.Writer) error {
@@ -33,7 +33,7 @@ func (r *TerminalReporter) Generate(results []model.DiffResult, summary model.Di
 				}
 
 				if d.Ignored {
-					fmt.Fprintf(w, "    %s \033[90m%s: 忽略(%s)\033[0m\n", prefix, d.Path, d.Rule)
+					fmt.Fprintf(w, "    %s \033[90m%s: ignored(%s)\033[0m\n", prefix, d.Path, d.Rule)
 				} else {
 					sevColor := "\033[31m" // red for error
 					switch d.Severity {
@@ -54,18 +54,18 @@ func (r *TerminalReporter) Generate(results []model.DiffResult, summary model.Di
 		}
 	}
 
-	// 摘要
+	// Summary
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "────────────────")
-	fmt.Fprintf(w, "总计: %d 条记录, %d 匹配, %d 差异\n",
+	fmt.Fprintf(w, "Total: %d records, %d matched, %d differences\n",
 		summary.TotalCount, summary.MatchCount, summary.DiffCount)
 	if summary.IgnoreCount > 0 {
-		fmt.Fprintf(w, "忽略: %d 条差异 (规则匹配)\n", summary.IgnoreCount)
+		fmt.Fprintf(w, "Ignored: %d differences (rule matched)\n", summary.IgnoreCount)
 	}
 	if summary.ErrorCount > 0 {
-		fmt.Fprintf(w, "严重: %d 条错误级差异\n", summary.ErrorCount)
+		fmt.Fprintf(w, "Critical: %d error-level differences\n", summary.ErrorCount)
 	}
-	fmt.Fprintf(w, "匹配率: \033[1m%.1f%%\033[0m\n", summary.MatchRate*100)
+	fmt.Fprintf(w, "Match rate: \033[1m%.1f%%\033[0m\n", summary.MatchRate*100)
 	fmt.Fprintln(w)
 
 	return nil

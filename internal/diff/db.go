@@ -7,26 +7,26 @@ import (
 	"shadiff/internal/model"
 )
 
-// CompareDBSideEffects 比较 SQL 类数据库 (MySQL/PostgreSQL) 副作用
+// CompareDBSideEffects compares SQL database (MySQL/PostgreSQL) side effects
 func CompareDBSideEffects(original, replay []model.SideEffect) []model.Difference {
 	origSQL := filterByType(original, "mysql", "postgres")
 	replaySQL := filterByType(replay, "mysql", "postgres")
 
 	var diffs []model.Difference
 
-	// 比较查询数量
+	// Compare query count
 	if len(origSQL) != len(replaySQL) {
 		diffs = append(diffs, model.Difference{
 			Kind:     model.DiffDBQueryCount,
 			Path:     "sideEffects.db",
 			Expected: len(origSQL),
 			Actual:   len(replaySQL),
-			Message:  fmt.Sprintf("SQL 查询数量不同: %d vs %d", len(origSQL), len(replaySQL)),
+			Message:  fmt.Sprintf("SQL query count differs: %d vs %d", len(origSQL), len(replaySQL)),
 			Severity: model.SeverityError,
 		})
 	}
 
-	// 逐条比较 SQL (按顺序配对)
+	// Compare SQL statements one by one (paired by order)
 	minLen := len(origSQL)
 	if len(replaySQL) < minLen {
 		minLen = len(replaySQL)
@@ -35,7 +35,7 @@ func CompareDBSideEffects(original, replay []model.SideEffect) []model.Differenc
 	for i := 0; i < minLen; i++ {
 		path := fmt.Sprintf("sideEffects.db[%d]", i)
 
-		// 标准化 SQL 再比较
+		// Normalize SQL before comparing
 		origQuery := normalizeSQL(origSQL[i].Query)
 		replayQuery := normalizeSQL(replaySQL[i].Query)
 
@@ -45,7 +45,7 @@ func CompareDBSideEffects(original, replay []model.SideEffect) []model.Differenc
 				Path:     path + ".query",
 				Expected: origSQL[i].Query,
 				Actual:   replaySQL[i].Query,
-				Message:  "SQL 语句不同",
+				Message:  "SQL statement differs",
 				Severity: model.SeverityError,
 			})
 		}
@@ -54,17 +54,17 @@ func CompareDBSideEffects(original, replay []model.SideEffect) []model.Differenc
 	return diffs
 }
 
-// normalizeSQL 标准化 SQL 语句，便于比较
+// normalizeSQL normalizes a SQL statement for comparison
 func normalizeSQL(sql string) string {
-	// 去除多余空白
+	// Remove extra whitespace
 	sql = strings.TrimSpace(sql)
 	sql = strings.Join(strings.Fields(sql), " ")
-	// 统一大小写 (SQL 关键字)
+	// Normalize case (SQL keywords)
 	sql = strings.ToUpper(sql)
 	return sql
 }
 
-// filterByType 过滤指定 DB 类型的副作用
+// filterByType filters side effects by the specified DB types
 func filterByType(effects []model.SideEffect, dbTypes ...string) []model.SideEffect {
 	typeSet := make(map[string]bool)
 	for _, t := range dbTypes {

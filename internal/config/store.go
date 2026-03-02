@@ -7,14 +7,14 @@ import (
 	"sync"
 )
 
-// Store 线程安全的配置存储，持久化到 ~/.shadiff/config.json
+// Store is a thread-safe configuration store, persisted to ~/.shadiff/config.json
 type Store struct {
 	path   string
 	config *AppConfig
 	mu     sync.RWMutex
 }
 
-// NewStore 创建配置存储实例，自动加载或初始化默认配置
+// NewStore creates a config store instance, automatically loading or initializing default config.
 func NewStore() (*Store, error) {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
@@ -33,7 +33,7 @@ func NewStore() (*Store, error) {
 	return s, nil
 }
 
-// Load 从文件加载配置
+// Load reads config from file.
 func (s *Store) Load() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -49,7 +49,7 @@ func (s *Store) Load() error {
 	return nil
 }
 
-// Save 保存配置到文件
+// Save writes config to file.
 func (s *Store) Save() error {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -60,7 +60,7 @@ func (s *Store) Save() error {
 	return os.WriteFile(s.path, data, 0644)
 }
 
-// Get 返回配置的拷贝
+// Get returns a copy of the config.
 func (s *Store) Get() *AppConfig {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -68,7 +68,7 @@ func (s *Store) Get() *AppConfig {
 	return &cfg
 }
 
-// Update 原子更新配置并持久化
+// Update atomically updates the config and persists it.
 func (s *Store) Update(fn func(*AppConfig)) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -80,7 +80,7 @@ func (s *Store) Update(fn func(*AppConfig)) error {
 	return os.WriteFile(s.path, data, 0644)
 }
 
-// DataDir 返回数据目录路径，优先使用配置中的 DataDir，否则默认 ~/.shadiff
+// DataDir returns the data directory path, preferring the configured DataDir, otherwise defaults to ~/.shadiff
 func (s *Store) DataDir() string {
 	cfg := s.Get()
 	if cfg.Storage.DataDir != "" {

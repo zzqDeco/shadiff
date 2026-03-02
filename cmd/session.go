@@ -14,25 +14,25 @@ import (
 
 var sessionCmd = &cobra.Command{
 	Use:   "session",
-	Short: "管理录制会话",
+	Short: "Manage recording sessions",
 }
 
 var sessionListCmd = &cobra.Command{
 	Use:   "list",
-	Short: "列出所有会话",
+	Short: "List all sessions",
 	RunE:  runSessionList,
 }
 
 var sessionShowCmd = &cobra.Command{
 	Use:   "show <id>",
-	Short: "显示会话详情",
+	Short: "Show session details",
 	Args:  cobra.ExactArgs(1),
 	RunE:  runSessionShow,
 }
 
 var sessionDeleteCmd = &cobra.Command{
 	Use:   "delete <id>",
-	Short: "删除会话",
+	Short: "Delete a session",
 	Args:  cobra.ExactArgs(1),
 	RunE:  runSessionDelete,
 }
@@ -42,7 +42,7 @@ var (
 )
 
 func init() {
-	sessionListCmd.Flags().StringVar(&sessionTagFilter, "tag", "", "按标签过滤")
+	sessionListCmd.Flags().StringVar(&sessionTagFilter, "tag", "", "Filter by tag")
 
 	sessionCmd.AddCommand(sessionListCmd)
 	sessionCmd.AddCommand(sessionShowCmd)
@@ -53,7 +53,7 @@ func init() {
 func getStore() (*storage.FileStore, error) {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
-		return nil, fmt.Errorf("获取用户目录失败: %w", err)
+		return nil, fmt.Errorf("failed to get user home directory: %w", err)
 	}
 	dataDir := homeDir + "/.shadiff"
 	return storage.NewFileStore(dataDir)
@@ -72,11 +72,11 @@ func runSessionList(cmd *cobra.Command, args []string) error {
 
 	sessions, err := store.List(filter)
 	if err != nil {
-		return fmt.Errorf("列出会话失败: %w", err)
+		return fmt.Errorf("failed to list sessions: %w", err)
 	}
 
 	if len(sessions) == 0 {
-		fmt.Println("暂无会话记录")
+		fmt.Println("No sessions found")
 		return nil
 	}
 
@@ -97,19 +97,19 @@ func runSessionShow(cmd *cobra.Command, args []string) error {
 
 	sess, err := store.Get(args[0])
 	if err != nil {
-		return fmt.Errorf("获取会话失败: %w", err)
+		return fmt.Errorf("failed to get session: %w", err)
 	}
 
 	fmt.Printf("ID:          %s\n", sess.ID)
-	fmt.Printf("名称:        %s\n", sess.Name)
-	fmt.Printf("描述:        %s\n", sess.Description)
-	fmt.Printf("状态:        %s\n", sess.Status)
-	fmt.Printf("记录数:      %d\n", sess.RecordCount)
-	fmt.Printf("源端:        %s\n", sess.Source.BaseURL)
-	fmt.Printf("目标端:      %s\n", sess.Target.BaseURL)
-	fmt.Printf("标签:        %v\n", sess.Tags)
-	fmt.Printf("创建时间:    %s\n", time.UnixMilli(sess.CreatedAt).Format("2006-01-02 15:04:05"))
-	fmt.Printf("更新时间:    %s\n", time.UnixMilli(sess.UpdatedAt).Format("2006-01-02 15:04:05"))
+	fmt.Printf("Name:        %s\n", sess.Name)
+	fmt.Printf("Description: %s\n", sess.Description)
+	fmt.Printf("Status:      %s\n", sess.Status)
+	fmt.Printf("Records:     %d\n", sess.RecordCount)
+	fmt.Printf("Source:      %s\n", sess.Source.BaseURL)
+	fmt.Printf("Target:      %s\n", sess.Target.BaseURL)
+	fmt.Printf("Tags:        %v\n", sess.Tags)
+	fmt.Printf("Created:     %s\n", time.UnixMilli(sess.CreatedAt).Format("2006-01-02 15:04:05"))
+	fmt.Printf("Updated:     %s\n", time.UnixMilli(sess.UpdatedAt).Format("2006-01-02 15:04:05"))
 
 	return nil
 }
@@ -120,16 +120,16 @@ func runSessionDelete(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// 先确认会话存在
+	// Verify session exists first
 	sess, err := store.Get(args[0])
 	if err != nil {
-		return fmt.Errorf("会话不存在: %w", err)
+		return fmt.Errorf("session not found: %w", err)
 	}
 
 	if err := store.Delete(sess.ID); err != nil {
-		return fmt.Errorf("删除会话失败: %w", err)
+		return fmt.Errorf("failed to delete session: %w", err)
 	}
 
-	fmt.Printf("已删除会话: %s (%s)\n", sess.ID, sess.Name)
+	fmt.Printf("Session deleted: %s (%s)\n", sess.ID, sess.Name)
 	return nil
 }

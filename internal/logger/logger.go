@@ -16,7 +16,7 @@ var (
 	mu       sync.Mutex
 )
 
-// Init 初始化全局日志。日志写入 stderr 和按日轮转的文件。
+// Init initializes the global logger. Logs are written to stderr and a daily-rotated file.
 func Init(dataDir string) error {
 	mu.Lock()
 	defer mu.Unlock()
@@ -57,7 +57,7 @@ func Init(dataDir string) error {
 	return nil
 }
 
-// Close 刷新并关闭日志文件
+// Close flushes and closes the log file.
 func Close() {
 	mu.Lock()
 	defer mu.Unlock()
@@ -68,7 +68,7 @@ func Close() {
 	}
 }
 
-// L 返回全局日志实例
+// L returns the global logger instance.
 func L() *slog.Logger {
 	if instance == nil {
 		return slog.Default()
@@ -76,61 +76,61 @@ func L() *slog.Logger {
 	return instance
 }
 
-// --- 领域便捷方法 ---
+// --- Domain convenience methods ---
 
-// CaptureEvent 记录采集事件
+// CaptureEvent logs a capture event.
 func CaptureEvent(event string, attrs ...any) {
 	args := []any{"event", event}
 	args = append(args, attrs...)
 	L().Info("[CAPTURE]", args...)
 }
 
-// ReplayEvent 记录回放事件
+// ReplayEvent logs a replay event.
 func ReplayEvent(event string, attrs ...any) {
 	args := []any{"event", event}
 	args = append(args, attrs...)
 	L().Info("[REPLAY]", args...)
 }
 
-// DiffEvent 记录对拍事件
+// DiffEvent logs a diff event.
 func DiffEvent(event string, attrs ...any) {
 	args := []any{"event", event}
 	args = append(args, attrs...)
 	L().Info("[DIFF]", args...)
 }
 
-// DBHookEvent 记录数据库钩子事件
+// DBHookEvent logs a database hook event.
 func DBHookEvent(event string, dbType string, attrs ...any) {
 	args := []any{"event", event, "dbType", dbType}
 	args = append(args, attrs...)
 	L().Info("[DBHOOK]", args...)
 }
 
-// SessionEvent 记录会话事件
+// SessionEvent logs a session event.
 func SessionEvent(event string, sessionID string, attrs ...any) {
 	args := []any{"event", event, "session_id", sessionID}
 	args = append(args, attrs...)
 	L().Info("[SESSION]", args...)
 }
 
-// Error 记录通用错误
+// Error logs a general error.
 func Error(msg string, err error, attrs ...any) {
 	args := []any{"error", err.Error()}
 	args = append(args, attrs...)
 	L().Error(msg, args...)
 }
 
-// Debug 记录调试信息
+// Debug logs a debug message.
 func Debug(msg string, attrs ...any) {
 	L().Debug(msg, attrs...)
 }
 
-// Info 记录信息
+// Info logs an informational message.
 func Info(msg string, attrs ...any) {
 	L().Info(msg, attrs...)
 }
 
-// Warn 记录警告
+// Warn logs a warning message.
 func Warn(msg string, attrs ...any) {
 	L().Warn(msg, attrs...)
 }

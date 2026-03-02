@@ -12,7 +12,7 @@ import (
 	"shadiff/internal/model"
 )
 
-// PostgresHook PostgreSQL 协议代理，解析 Simple/Extended Query
+// PostgresHook is a PostgreSQL protocol proxy that parses Simple/Extended Query messages
 type PostgresHook struct {
 	listenAddr  string
 	targetAddr  string
@@ -22,7 +22,7 @@ type PostgresHook struct {
 	wg          sync.WaitGroup
 }
 
-// PostgreSQL 前端消息类型
+// PostgreSQL frontend message types
 const (
 	pgMsgQuery = 'Q' // Simple Query
 	pgMsgParse = 'P' // Extended Query: Parse
@@ -106,14 +106,14 @@ func (h *PostgresHook) handleConn(clientConn net.Conn) {
 
 	var wg sync.WaitGroup
 
-	// 服务端 -> 客户端（透传）
+	// Server -> Client (passthrough)
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		io.Copy(clientConn, serverConn)
 	}()
 
-	// 客户端 -> 服务端（嗅探）
+	// Client -> Server (sniff)
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -125,7 +125,7 @@ func (h *PostgresHook) handleConn(clientConn net.Conn) {
 
 func (h *PostgresHook) sniffClientToServer(client, server net.Conn) {
 	buf := make([]byte, 64*1024)
-	// 标记是否已过启动阶段（startup message 没有类型字节）
+	// Flag whether the startup phase has passed (startup messages have no type byte)
 	startup := true
 
 	for {
@@ -134,26 +134,26 @@ func (h *PostgresHook) sniffClientToServer(client, server net.Conn) {
 			return
 		}
 
-		// 转发
+		// Forward
 		if _, err := server.Write(buf[:n]); err != nil {
 			return
 		}
 
 		if startup {
-			// 启动消息格式: 4字节长度 + 4字节协议版本 + ...
-			// 跳过启动阶段的消息
+			// Startup message format: 4-byte length + 4-byte protocol version + ...
+			// Skip startup phase messages
 			if n >= 8 {
 				startup = false
 			}
 			continue
 		}
 
-		// 解析 PostgreSQL 前端消息
+		// Parse PostgreSQL frontend messages
 		h.parsePGMessage(buf[:n])
 	}
 }
 
-// parsePGMessage 解析 PostgreSQL 前端消息
+// parsePGMessage parses PostgreSQL frontend messages
 func (h *PostgresHook) parsePGMessage(data []byte) {
 	offset := 0
 	for offset < len(data) {
@@ -172,14 +172,14 @@ func (h *PostgresHook) parsePGMessage(data []byte) {
 
 		switch msgType {
 		case pgMsgQuery:
-			// Simple Query: 以 null 结尾的字符串
+			// Simple Query: null-terminated string
 			query := extractNullTermString(payload)
 			if query != "" {
 				h.emitSideEffect(query)
 			}
 		case pgMsgParse:
 			// Parse: stmt_name(null) + query(null) + ...
-			// 跳过 statement name
+			// Skip statement name
 			idx := nullTermIndex(payload)
 			if idx >= 0 && idx+1 < len(payload) {
 				query := extractNullTermString(payload[idx+1:])

@@ -1,68 +1,68 @@
 package config
 
-// AppConfig 根配置
+// AppConfig is the root configuration.
 type AppConfig struct {
-	Capture CaptureConfig `json:"capture"` // 采集配置
-	Replay  ReplayConfig  `json:"replay"`  // 回放配置
-	Diff    DiffConfig    `json:"diff"`    // 对拍配置
-	Storage StorageConfig `json:"storage"` // 存储配置
-	Log     LogConfig     `json:"log"`     // 日志配置
+	Capture CaptureConfig `json:"capture"` // Capture configuration
+	Replay  ReplayConfig  `json:"replay"`  // Replay configuration
+	Diff    DiffConfig    `json:"diff"`    // Diff configuration
+	Storage StorageConfig `json:"storage"` // Storage configuration
+	Log     LogConfig     `json:"log"`     // Log configuration
 }
 
-// CaptureConfig 采集配置
+// CaptureConfig holds capture settings.
 type CaptureConfig struct {
-	ListenAddr   string        `json:"listenAddr"`   // HTTP 代理监听地址 (default: ":18080")
-	MaxBodySize  int64         `json:"maxBodySize"`  // 最大 body 录制大小 (bytes)
-	ExcludePaths []string      `json:"excludePaths"` // 排除的路径前缀
-	DBProxies    []DBProxyConfig `json:"dbProxies"`  // DB 代理配置列表
+	ListenAddr   string        `json:"listenAddr"`   // HTTP proxy listen address (default: ":18080")
+	MaxBodySize  int64         `json:"maxBodySize"`  // Max body recording size (bytes)
+	ExcludePaths []string      `json:"excludePaths"` // Excluded path prefixes
+	DBProxies    []DBProxyConfig `json:"dbProxies"`  // DB proxy configuration list
 }
 
-// DBProxyConfig 数据库代理配置
+// DBProxyConfig holds database proxy settings.
 type DBProxyConfig struct {
 	Type       string `json:"type"`       // mysql / postgres / mongo
-	ListenAddr string `json:"listenAddr"` // 代理监听地址
-	TargetAddr string `json:"targetAddr"` // 真实 DB 地址
+	ListenAddr string `json:"listenAddr"` // Proxy listen address
+	TargetAddr string `json:"targetAddr"` // Actual DB address
 }
 
-// ReplayConfig 回放配置
+// ReplayConfig holds replay settings.
 type ReplayConfig struct {
-	Concurrency int    `json:"concurrency"` // 并发数
-	Timeout     string `json:"timeout"`     // 单请求超时
-	RetryCount  int    `json:"retryCount"`  // 重试次数
-	DelayMs     int    `json:"delayMs"`     // 请求间延迟 ms
+	Concurrency int    `json:"concurrency"` // Concurrency level
+	Timeout     string `json:"timeout"`     // Per-request timeout
+	RetryCount  int    `json:"retryCount"`  // Retry count
+	DelayMs     int    `json:"delayMs"`     // Delay between requests in ms
 }
 
-// DiffConfig 对拍配置
+// DiffConfig holds diff/comparison settings.
 type DiffConfig struct {
-	IgnoreHeaders []string `json:"ignoreHeaders"` // 忽略的 header 列表
-	IgnoreOrder   bool     `json:"ignoreOrder"`   // 忽略 JSON 数组顺序
-	MaxDiffs      int      `json:"maxDiffs"`      // 最大差异数
-	Rules         []Rule   `json:"rules"`         // 内置对拍规则
-	RulesFile     string   `json:"rulesFile"`     // 外部规则文件路径
+	IgnoreHeaders []string `json:"ignoreHeaders"` // Headers to ignore
+	IgnoreOrder   bool     `json:"ignoreOrder"`   // Ignore JSON array order
+	MaxDiffs      int      `json:"maxDiffs"`      // Max number of diffs
+	Rules         []Rule   `json:"rules"`         // Built-in diff rules
+	RulesFile     string   `json:"rulesFile"`     // External rules file path
 }
 
-// Rule 对拍规则
+// Rule defines a diff rule.
 type Rule struct {
-	Name    string   `json:"name"`    // 规则名
+	Name    string   `json:"name"`    // Rule name
 	Kind    string   `json:"kind"`    // ignore / transform / custom
-	Paths   []string `json:"paths"`   // 匹配的 JSON 路径 (支持 glob)
-	Pattern string   `json:"pattern"` // 值正则匹配 (可选)
-	Matcher string   `json:"matcher"` // 自定义匹配器名 (可选)
+	Paths   []string `json:"paths"`   // JSON paths to match (supports glob)
+	Pattern string   `json:"pattern"` // Value regex match (optional)
+	Matcher string   `json:"matcher"` // Custom matcher name (optional)
 }
 
-// StorageConfig 存储配置
+// StorageConfig holds storage settings.
 type StorageConfig struct {
-	DataDir     string `json:"dataDir"`     // 数据目录 (default: ~/.shadiff)
-	MaxSessions int    `json:"maxSessions"` // 最大保留会话数
+	DataDir     string `json:"dataDir"`     // Data directory (default: ~/.shadiff)
+	MaxSessions int    `json:"maxSessions"` // Max number of retained sessions
 }
 
-// LogConfig 日志配置
+// LogConfig holds log settings.
 type LogConfig struct {
 	Level  string `json:"level"`  // debug / info / warn / error
-	LogDir string `json:"logDir"` // 日志目录
+	LogDir string `json:"logDir"` // Log directory
 }
 
-// DefaultConfig 返回默认配置
+// DefaultConfig returns the default configuration.
 func DefaultConfig() *AppConfig {
 	return &AppConfig{
 		Capture: CaptureConfig{

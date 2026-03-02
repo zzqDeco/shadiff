@@ -1,16 +1,16 @@
 package model
 
-// HTTPRequest HTTP 请求模型
+// HTTPRequest represents an HTTP request model
 type HTTPRequest struct {
 	Method  string              `json:"method"`
-	Path    string              `json:"path"`    // 不含 host 的路径
-	Query   string              `json:"query"`   // 原始 query string
+	Path    string              `json:"path"`    // Path without host
+	Query   string              `json:"query"`   // Raw query string
 	Headers map[string][]string `json:"headers"`
 	Body    []byte              `json:"body"`
-	BodyLen int64               `json:"bodyLen"` // body 长度，用于大 body 截断场景
+	BodyLen int64               `json:"bodyLen"` // Body length, used for large body truncation scenarios
 }
 
-// HTTPResponse HTTP 响应模型
+// HTTPResponse represents an HTTP response model
 type HTTPResponse struct {
 	StatusCode int                 `json:"statusCode"`
 	Headers    map[string][]string `json:"headers"`

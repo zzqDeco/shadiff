@@ -8,7 +8,7 @@ import (
 	"shadiff/internal/storage"
 )
 
-// Engine 回放引擎，协调录制数据的读取和回放
+// Engine is the replay engine that coordinates reading and replaying recorded data
 type Engine struct {
 	store     *storage.FileStore
 	sessionID string
@@ -16,7 +16,7 @@ type Engine struct {
 	delay     time.Duration
 }
 
-// EngineConfig 回放引擎配置
+// EngineConfig holds the replay engine configuration
 type EngineConfig struct {
 	SessionID   string
 	TargetURL   string
@@ -25,7 +25,7 @@ type EngineConfig struct {
 	Delay       time.Duration
 }
 
-// NewEngine 创建回放引擎
+// NewEngine creates a new replay engine
 func NewEngine(store *storage.FileStore, cfg EngineConfig) *Engine {
 	transform := TransformConfig{
 		TargetBaseURL: cfg.TargetURL,
@@ -49,16 +49,16 @@ func NewEngine(store *storage.FileStore, cfg EngineConfig) *Engine {
 	}
 }
 
-// Run 执行回放，返回所有回放结果
+// Run executes the replay and returns all replay results
 func (e *Engine) Run() ([]ReplayResult, error) {
-	// 读取录制记录
+	// Read recorded records
 	records, err := e.store.ListRecords(e.sessionID)
 	if err != nil {
-		return nil, fmt.Errorf("读取录制记录失败: %w", err)
+		return nil, fmt.Errorf("failed to read recorded records: %w", err)
 	}
 
 	if len(records) == 0 {
-		return nil, fmt.Errorf("会话 %s 没有录制记录", e.sessionID)
+		return nil, fmt.Errorf("session %s has no recorded records", e.sessionID)
 	}
 
 	logger.ReplayEvent("replay_started",
@@ -67,12 +67,12 @@ func (e *Engine) Run() ([]ReplayResult, error) {
 		"concurrency", e.pool.concurrency,
 	)
 
-	fmt.Printf("开始回放: %d 条记录, 并发数: %d\n", len(records), e.pool.concurrency)
+	fmt.Printf("Starting replay: %d records, concurrency: %d\n", len(records), e.pool.concurrency)
 
-	// 执行回放
+	// Execute replay
 	results := e.pool.Execute(records, e.delay)
 
-	// 保存回放记录
+	// Save replay records
 	successCount := 0
 	errorCount := 0
 	for _, r := range results {
@@ -93,6 +93,6 @@ func (e *Engine) Run() ([]ReplayResult, error) {
 		"errors", errorCount,
 	)
 
-	fmt.Printf("回放完成: 成功 %d, 失败 %d\n", successCount, errorCount)
+	fmt.Printf("Replay completed: %d succeeded, %d failed\n", successCount, errorCount)
 	return results, nil
 }

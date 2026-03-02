@@ -10,22 +10,22 @@ import (
 	"shadiff/internal/storage"
 )
 
-// Recorder 统一录制器，接收 Record 并持久化到存储
+// Recorder is a unified recorder that receives Records and persists them to storage
 type Recorder struct {
 	sessionID string
 	store     *storage.FileStore
 	count     atomic.Int64
 
-	// sideEffectCh 接收来自 DB hook 等的副作用事件
+	// sideEffectCh receives side-effect events from DB hooks, etc.
 	sideEffectCh chan model.SideEffect
-	// pendingEffects 暂存尚未关联到 Record 的副作用
+	// pendingEffects temporarily stores side effects not yet associated with a Record
 	pendingEffects []model.SideEffect
 	mu             sync.Mutex
 
 	done chan struct{}
 }
 
-// NewRecorder 创建录制器
+// NewRecorder creates a new recorder
 func NewRecorder(sessionID string, store *storage.FileStore) *Recorder {
 	r := &Recorder{
 		sessionID:    sessionID,
@@ -37,11 +37,11 @@ func NewRecorder(sessionID string, store *storage.FileStore) *Recorder {
 	return r
 }
 
-// Record 录制一条行为记录
+// Record records a single behavior entry
 func (r *Recorder) Record(record *model.Record) error {
 	record.SessionID = r.sessionID
 
-	// 将暂存的副作用附加到 record
+	// Attach pending side effects to the record
 	r.mu.Lock()
 	if len(r.pendingEffects) > 0 {
 		record.SideEffects = append(record.SideEffects, r.pendingEffects...)
@@ -62,22 +62,22 @@ func (r *Recorder) Record(record *model.Record) error {
 	return nil
 }
 
-// SideEffectChan 返回副作用通道，供 DB hook 等外部组件发送副作用
+// SideEffectChan returns the side-effect channel for external components like DB hooks to send side effects
 func (r *Recorder) SideEffectChan() chan<- model.SideEffect {
 	return r.sideEffectCh
 }
 
-// Count 返回已录制的记录数
+// Count returns the number of recorded entries
 func (r *Recorder) Count() int64 {
 	return r.count.Load()
 }
 
-// Stop 停止录制器
+// Stop stops the recorder
 func (r *Recorder) Stop() {
 	close(r.done)
 }
 
-// collectSideEffects 后台收集副作用事件
+// collectSideEffects collects side-effect events in the background
 func (r *Recorder) collectSideEffects() {
 	for {
 		select {
@@ -86,7 +86,7 @@ func (r *Recorder) collectSideEffects() {
 			r.pendingEffects = append(r.pendingEffects, effect)
 			r.mu.Unlock()
 		case <-r.done:
-			// 排空通道
+			// Drain the channel
 			for {
 				select {
 				case effect := <-r.sideEffectCh:

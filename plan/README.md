@@ -1,18 +1,18 @@
-# Shadiff 开发计划索引
+# Shadiff Development Plan Index
 
-## 状态图例
+## Status Legend
 
-| 标记 | 含义 |
-|------|------|
-| 待实施 | 尚未开始 |
-| 进行中 | 正在实施 |
-| 已完成 | 已完成并验证 |
+| Mark | Meaning |
+|------|---------|
+| Pending | Not yet started |
+| In Progress | Currently being implemented |
+| Completed | Done and verified |
 
-## 计划文档
+## Plan Documents
 
-| 编号 | 描述 | 状态 |
-|------|------|------|
-| Phase 1 | 基础骨架 (model/config/logger/storage/CLI) | 已完成 |
-| Phase 2 | 核心录制和回放 (capture/replay) | 已完成 |
-| Phase 3 | 对拍引擎 (diff) | 已完成 |
-| Phase 4 | 报告和 DB 采集 (reporter/dbhook) | 已完成 |
+| Phase | Description | Status |
+|-------|-------------|--------|
+| Phase 1 | Foundation (model/config/logger/storage/CLI) | Completed |
+| Phase 2 | Core Record & Replay (capture/replay) | Completed |
+| Phase 3 | Diff Engine (diff) | Completed |
+| Phase 4 | Reporting & DB Hooks (reporter/dbhook) | Completed |

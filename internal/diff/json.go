@@ -9,24 +9,24 @@ import (
 	"shadiff/internal/model"
 )
 
-// JSONDiffer JSON 结构化差异比较器
+// JSONDiffer is a structured JSON difference comparator
 type JSONDiffer struct {
-	IgnoreOrder bool // 忽略数组顺序
+	IgnoreOrder bool // ignore array order
 }
 
-// Compare 比较两个 JSON body，返回差异列表
+// Compare compares two JSON bodies and returns a list of differences
 func (d *JSONDiffer) Compare(expected, actual []byte) []model.Difference {
 	var ev, av any
 
 	if err := json.Unmarshal(expected, &ev); err != nil {
-		// expected 不是有效 JSON，做字节比较
+		// expected is not valid JSON, fall back to byte comparison
 		if string(expected) != string(actual) {
 			return []model.Difference{{
 				Kind:     model.DiffBody,
 				Path:     "body",
 				Expected: string(expected),
 				Actual:   string(actual),
-				Message:  "响应 body 不一致 (非 JSON)",
+				Message:  "response body mismatch (non-JSON)",
 				Severity: model.SeverityError,
 			}}
 		}
@@ -39,7 +39,7 @@ func (d *JSONDiffer) Compare(expected, actual []byte) []model.Difference {
 			Path:     "body",
 			Expected: string(expected),
 			Actual:   string(actual),
-			Message:  "录制为 JSON 但回放非 JSON",
+			Message:  "recorded response is JSON but replay response is not",
 			Severity: model.SeverityError,
 		}}
 	}
@@ -47,11 +47,11 @@ func (d *JSONDiffer) Compare(expected, actual []byte) []model.Difference {
 	return d.compareValues("body", ev, av)
 }
 
-// compareValues 递归比较两个值
+// compareValues recursively compares two values
 func (d *JSONDiffer) compareValues(path string, expected, actual any) []model.Difference {
-	// 类型不同
+	// types differ
 	if reflect.TypeOf(expected) != reflect.TypeOf(actual) {
-		// 特殊处理：json.Unmarshal 可能将 int 和 float 混合
+		// special handling: json.Unmarshal may mix int and float
 		ef, eOk := toFloat64(expected)
 		af, aOk := toFloat64(actual)
 		if eOk && aOk {
@@ -61,7 +61,7 @@ func (d *JSONDiffer) compareValues(path string, expected, actual any) []model.Di
 					Path:     path,
 					Expected: expected,
 					Actual:   actual,
-					Message:  fmt.Sprintf("数值不同: %v != %v", expected, actual),
+					Message:  fmt.Sprintf("numeric value differs: %v != %v", expected, actual),
 					Severity: model.SeverityError,
 				}}
 			}
@@ -73,7 +73,7 @@ func (d *JSONDiffer) compareValues(path string, expected, actual any) []model.Di
 			Path:     path,
 			Expected: expected,
 			Actual:   actual,
-			Message:  fmt.Sprintf("类型不同: %T vs %T", expected, actual),
+			Message:  fmt.Sprintf("type differs: %T vs %T", expected, actual),
 			Severity: model.SeverityError,
 		}}
 	}
@@ -98,11 +98,11 @@ func (d *JSONDiffer) compareValues(path string, expected, actual any) []model.Di
 	}
 }
 
-// compareObjects 比较两个 JSON 对象
+// compareObjects compares two JSON objects
 func (d *JSONDiffer) compareObjects(path string, expected, actual map[string]any) []model.Difference {
 	var diffs []model.Difference
 
-	// 收集所有 key
+	// collect all keys
 	allKeys := make(map[string]bool)
 	for k := range expected {
 		allKeys[k] = true
@@ -111,7 +111,7 @@ func (d *JSONDiffer) compareObjects(path string, expected, actual map[string]any
 		allKeys[k] = true
 	}
 
-	// 排序 key 以保证输出稳定
+	// sort keys for stable output
 	keys := make([]string, 0, len(allKeys))
 	for k := range allKeys {
 		keys = append(keys, k)
@@ -129,7 +129,7 @@ func (d *JSONDiffer) compareObjects(path string, expected, actual map[string]any
 				Path:     fieldPath,
 				Expected: ev,
 				Actual:   nil,
-				Message:  "字段缺失",
+				Message:  "field missing",
 				Severity: model.SeverityError,
 			})
 		} else if !eExists && aExists {
@@ -138,7 +138,7 @@ func (d *JSONDiffer) compareObjects(path string, expected, actual map[string]any
 				Path:     fieldPath,
 				Expected: nil,
 				Actual:   av,
-				Message:  "多出字段",
+				Message:  "extra field",
 				Severity: model.SeverityWarning,
 			})
 		} else {
@@ -149,7 +149,7 @@ func (d *JSONDiffer) compareObjects(path string, expected, actual map[string]any
 	return diffs
 }
 
-// compareArrays 比较两个 JSON 数组
+// compareArrays compares two JSON arrays
 func (d *JSONDiffer) compareArrays(path string, expected, actual []any) []model.Difference {
 	var diffs []model.Difference
 
@@ -159,7 +159,7 @@ func (d *JSONDiffer) compareArrays(path string, expected, actual []any) []model.
 			Path:     path,
 			Expected: len(expected),
 			Actual:   len(actual),
-			Message:  fmt.Sprintf("数组长度不同: %d vs %d", len(expected), len(actual)),
+			Message:  fmt.Sprintf("array length differs: %d vs %d", len(expected), len(actual)),
 			Severity: model.SeverityError,
 		})
 	}
@@ -180,7 +180,7 @@ func (d *JSONDiffer) compareArrays(path string, expected, actual []any) []model.
 	return diffs
 }
 
-// compareArraysUnordered 无序比较数组（尝试匹配最佳配对）
+// compareArraysUnordered compares arrays without order (attempts best-match pairing)
 func (d *JSONDiffer) compareArraysUnordered(path string, expected, actual []any) []model.Difference {
 	var diffs []model.Difference
 	used := make([]bool, len(actual))
@@ -204,7 +204,7 @@ func (d *JSONDiffer) compareArraysUnordered(path string, expected, actual []any)
 				Path:     fmt.Sprintf("%s[%d]", path, i),
 				Expected: ev,
 				Actual:   nil,
-				Message:  "数组元素在回放结果中未找到匹配",
+				Message:  "array element not found in replay result",
 				Severity: model.SeverityError,
 			})
 		}
@@ -217,7 +217,7 @@ func (d *JSONDiffer) compareArraysUnordered(path string, expected, actual []any)
 				Path:     fmt.Sprintf("%s[extra]", path),
 				Expected: nil,
 				Actual:   av,
-				Message:  "回放结果中多出的数组元素",
+				Message:  "extra array element in replay result",
 				Severity: model.SeverityWarning,
 			})
 		}
