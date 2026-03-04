@@ -88,7 +88,7 @@ Rules:
 
 Types: `feat`, `fix`, `refactor`, `docs`, `test`, `chore`, `perf`
 
-Scopes: `model`, `config`, `capture`, `dbhook`, `storage`, `replay`, `diff`, `reporter`, `logger`, `cmd`
+Scopes: `model`, `config`, `capture`, `dbhook`, `storage`, `replay`, `diff`, `reporter`, `logger`, `cmd`, `daemon`
 
 Examples:
 - `feat(capture): add Redis protocol proxy support`

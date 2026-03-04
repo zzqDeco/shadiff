@@ -21,6 +21,7 @@ This document maps every package, source file, and key implementation pattern in
 | `replay` | `shadiff/internal/replay` | Replay engine with configurable worker pool, request transformation, and concurrent HTTP replay |
 | `reporter` | `shadiff/internal/reporter` | Report generation in terminal (ANSI), JSON, and HTML formats |
 | `storage` | `shadiff/internal/storage` | Storage interfaces and filesystem-based implementation using JSONL for records and JSON for metadata/results |
+| `daemon` | `shadiff/internal/daemon` | Daemon process management: PID file operations (write, read, remove, check liveness), platform-specific process detach (Unix Setsid / Windows CREATE_NEW_PROCESS_GROUP), process alive checking, signal sending (stop/force kill) |
 
 ---
 
@@ -38,11 +39,21 @@ This document maps every package, source file, and key implementation pattern in
 |------|-------------|
 | `root.go` | Root cobra command (`shadiff`); defines global flags (`--config`, `--verbose`, `--quiet`) and version string |
 | `version.go` | `shadiff version` command; prints build-time injected Version, Commit, BuildDate |
-| `record.go` | `shadiff record` command; starts HTTP reverse proxy, creates session, captures traffic, handles graceful shutdown |
+| `record.go` | `shadiff record` command; starts HTTP reverse proxy, creates session, captures traffic, handles graceful shutdown; supports `--daemon` mode via self-re-exec |
+| `record_stop.go` | `shadiff record stop` subcommand; stops a daemon recording session by sending signals (SIGTERM/os.Interrupt), with graceful wait and force kill fallback; includes `findSession()` helper for ID/name resolution |
+| `record_status.go` | `shadiff record status` subcommand; lists all active recording sessions or shows detailed status for a specific session including PID, process liveness, record count, and uptime |
 | `replay.go` | `shadiff replay` command; resolves session, creates replay engine, executes replay, prints summary; also contains `resolveSession()` helper |
 | `diff.go` | `shadiff diff` command; creates diff engine, runs comparison, prints results with `printDiffResults()` |
 | `report.go` | `shadiff report` command; loads saved diff results, creates reporter by format, writes output to file or stdout |
 | `session.go` | `shadiff session` parent command with `list`, `show`, `delete` subcommands; contains `getStore()` helper |
+
+### `internal/daemon/` -- Daemon Process Management
+
+| File | Description |
+|------|-------------|
+| `pidfile.go` | PID file management; `WritePID`/`ReadPID`/`RemovePID`/`IsRunning`/`PIDFilePath` for daemon session tracking |
+| `process_unix.go` | Unix-specific process operations (build tag `!windows`); `Detach` (Setsid), `isProcessAlive` (signal 0), `SendStop` (SIGTERM), `ForceKill` (SIGKILL) |
+| `process_windows.go` | Windows-specific process operations (build tag `windows`); `Detach` (CREATE_NEW_PROCESS_GROUP), `isProcessAlive` (OpenProcess+GetExitCodeProcess), `SendStop` (os.Interrupt), `ForceKill` (Kill) |
 
 ### `internal/capture/` -- Traffic Capture
 
@@ -280,3 +291,33 @@ The `Store` is thread-safe (`sync.RWMutex`) and supports atomic updates via `Upd
 - Record files use JSONL (one JSON object per line).
 - Diff results use a pretty-printed JSON array.
 - `Delete()` removes the entire session directory via `os.RemoveAll`.
+
+### 3.10 Daemon Process Management
+
+**Location**: `cmd/record.go`, `internal/daemon/`
+
+Shadiff supports running the recording proxy as a background daemon using a **self-re-exec pattern**:
+
+1. **Parent process** (`--daemon` flag):
+   - Creates the session and session directory.
+   - Determines the current executable path via `os.Executable()`.
+   - Re-execs itself with `--_daemon-child --session {sessionID}` plus all relevant flags.
+   - Calls `daemon.Detach(cmd)` to configure platform-specific process group detach:
+     - **Unix**: `SysProcAttr.Setsid = true` -- new session, detached from terminal.
+     - **Windows**: `SysProcAttr.CreationFlags = CREATE_NEW_PROCESS_GROUP` -- new process group.
+   - Redirects child stdout/stderr to `{sessionDir}/daemon.log`.
+   - Starts the child via `cmd.Start()`, writes the child PID to `{sessionDir}/pidfile`.
+   - Updates the session with the PID and exits.
+
+2. **Child process** (`--_daemon-child` flag):
+   - Loads the pre-created session from storage by ID.
+   - Updates the session PID to its own `os.Getpid()`.
+   - Runs the normal recording loop (proxy, signal handling, graceful shutdown).
+   - On exit, removes the PID file via `defer daemon.RemovePID()`.
+
+3. **PID file lifecycle**:
+   - Written by parent after child starts successfully.
+   - Read by `record stop` and `record status` to find the daemon process.
+   - Removed by child on graceful exit.
+   - Stale PID files (process dead) are detected by checking process liveness and cleaned up by `record stop`.
+   - Location: `~/.shadiff/sessions/{sessionID}/pidfile`.

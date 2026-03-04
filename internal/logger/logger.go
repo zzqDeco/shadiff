@@ -17,9 +17,12 @@ var (
 )
 
 // Init initializes the global logger. Logs are written to stderr and a daily-rotated file.
-func Init(dataDir string) error {
+// When daemonMode is true, logs are written only to the file (no stderr output).
+func Init(dataDir string, daemonMode ...bool) error {
 	mu.Lock()
 	defer mu.Unlock()
+
+	isDaemon := len(daemonMode) > 0 && daemonMode[0]
 
 	logDir := filepath.Join(dataDir, "logs")
 	if err := os.MkdirAll(logDir, 0755); err != nil {
@@ -39,9 +42,14 @@ func Init(dataDir string) error {
 	}
 	logFile = f
 
-	multiWriter := io.MultiWriter(os.Stderr, f)
+	var writer io.Writer
+	if isDaemon {
+		writer = f
+	} else {
+		writer = io.MultiWriter(os.Stderr, f)
+	}
 
-	handler := slog.NewTextHandler(multiWriter, &slog.HandlerOptions{
+	handler := slog.NewTextHandler(writer, &slog.HandlerOptions{
 		Level:     slog.LevelDebug,
 		AddSource: false,
 	})
@@ -52,6 +60,7 @@ func Init(dataDir string) error {
 	instance.Info("Logger initialized",
 		"logPath", logPath,
 		"pid", os.Getpid(),
+		"daemon", isDaemon,
 	)
 
 	return nil

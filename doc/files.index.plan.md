@@ -38,9 +38,19 @@ internal/model/session.go  -->  doc/src/internal/model/session.plan.md
 | `cmd/version.go` | `doc/src/cmd/version.plan.md` | CLI Command | cmd |
 | `cmd/session.go` | `doc/src/cmd/session.plan.md` | CLI Command | cmd |
 | `cmd/record.go` | `doc/src/cmd/record.plan.md` | CLI Command | cmd |
+| `cmd/record_stop.go` | `doc/src/cmd/record_stop.go.plan.md` | CLI Command | cmd |
+| `cmd/record_status.go` | `doc/src/cmd/record_status.go.plan.md` | CLI Command | cmd |
 | `cmd/replay.go` | `doc/src/cmd/replay.plan.md` | CLI Command | cmd |
 | `cmd/diff.go` | `doc/src/cmd/diff.plan.md` | CLI Command | cmd |
 | `cmd/report.go` | `doc/src/cmd/report.plan.md` | CLI Command | cmd |
+
+### internal/daemon/
+
+| Source File | Doc File | File Type | Module |
+|---|---|---|---|
+| `internal/daemon/pidfile.go` | `doc/src/internal/daemon/pidfile.go.plan.md` | Daemon Management | daemon |
+| `internal/daemon/process_unix.go` | `doc/src/internal/daemon/process_unix.go.plan.md` | Daemon Management | daemon |
+| `internal/daemon/process_windows.go` | `doc/src/internal/daemon/process_windows.go.plan.md` | Daemon Management | daemon |
 
 ### internal/model/
 
@@ -122,7 +132,8 @@ internal/model/session.go  -->  doc/src/internal/model/session.plan.md
 | Module | Source Files | Doc Files |
 |---|---|---|
 | root | 1 | 1 |
-| cmd | 7 | 7 |
+| cmd | 9 | 9 |
+| daemon | 3 | 3 |
 | model | 5 | 5 |
 | config | 2 | 2 |
 | capture | 2 | 2 |
@@ -132,4 +143,4 @@ internal/model/session.go  -->  doc/src/internal/model/session.plan.md
 | diff | 5 | 5 |
 | reporter | 4 | 4 |
 | logger | 1 | 1 |
-| **Total** | **36** | **36** |
+| **Total** | **41** | **41** |

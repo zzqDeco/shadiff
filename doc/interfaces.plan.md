@@ -36,8 +36,45 @@ shadiff record -t http://old-api:8080 --db-proxy mysql://:13306->:3306
 | `--session` | `-s` | auto-generated (`record-YYYYMMDD-HHMMSS`) | No | Session name |
 | `--db-proxy` | | | No | DB proxy specification (repeatable, e.g. `mysql://:13306->:3306`) |
 | `--duration` | `-d` | | No | Maximum recording duration (e.g. `30m`) |
+| `--daemon` | `-D` | `false` | No | Run as background daemon |
 
 **Behavior**: Creates a session, starts an HTTP reverse proxy from `--listen` to `--target`, captures every request/response pair as a `Record`, and persists them via JSONL streaming. Stops on SIGINT/SIGTERM or when `--duration` expires. On shutdown, updates the session status to `completed` with the final record count.
+
+In daemon mode (`-D`), the parent process creates the session, re-execs the binary as a detached child, writes the PID file, and exits immediately. The child runs the proxy in the background with output redirected to `daemon.log`.
+
+---
+
+### `shadiff record stop`
+
+Stop a daemon recording session.
+
+```
+shadiff record stop -s my-session
+shadiff record stop -s a1b2c3d4
+```
+
+| Flag | Short | Default | Required | Description |
+|------|-------|---------|----------|-------------|
+| `--session` | `-s` | | Yes | Session name or ID |
+
+**Behavior**: Resolves the session by name or ID, reads the PID file from the session directory, and checks if the process is alive. Sends a stop signal (SIGTERM on Unix, os.Interrupt on Windows). Waits up to 10 seconds for graceful exit (polling every 500ms), then force kills if still alive. Cleans up stale PID files when the process is already dead.
+
+---
+
+### `shadiff record status`
+
+Show recording session status.
+
+```
+shadiff record status
+shadiff record status -s my-session
+```
+
+| Flag | Short | Default | Required | Description |
+|------|-------|---------|----------|-------------|
+| `--session` | `-s` | | No | Session name or ID |
+
+**Behavior**: Without `-s`: lists all sessions with status `recording` in a table showing ID, Name, PID, process alive status, and creation time. With `-s`: shows detailed session information including ID, Name, Status, DaemonMode, PID, process alive status, record count, target URL, creation time, and uptime.
 
 ---
 

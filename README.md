@@ -35,6 +35,8 @@ shadiff/
 ├── cmd/                               # CLI commands
 │   ├── root.go                        # Cobra root, global flags
 │   ├── record.go                      # shadiff record
+│   ├── record_stop.go                 # shadiff record stop
+│   ├── record_status.go              # shadiff record status
 │   ├── replay.go                      # shadiff replay
 │   ├── diff.go                        # shadiff diff
 │   ├── report.go                      # shadiff report
@@ -76,6 +78,10 @@ shadiff/
 │   │   ├── terminal.go                # Colored terminal output
 │   │   ├── json.go                    # JSON format
 │   │   └── html.go                    # HTML report (embedded template)
+│   ├── daemon/                        # Daemon process management
+│   │   ├── pidfile.go                 # PID file read/write/check
+│   │   ├── process_unix.go            # Unix process detach + signals
+│   │   └── process_windows.go         # Windows process detach + signals
 │   └── logger/                        # Structured logging
 │       └── logger.go                  # slog + daily rotation
 ├── plan/                              # Development roadmap
@@ -116,6 +122,9 @@ shadiff record -t http://old-api:8080 -l :18080 -s "migration-v1"
 shadiff record -t http://old-api:8080 -l :18080 \
   --db-proxy mysql://:13306->:3306 -s "mysql-migration"
 
+# Run as background daemon
+shadiff record -D -t http://old-api:8080 -l :18080 -s "bg-session"
+
 # With MongoDB protocol proxy
 shadiff record -t http://old-api:8080 -l :18080 \
   --db-proxy mongo://:27018->:27017 -s "mongo-migration"
@@ -127,6 +136,22 @@ shadiff record -t http://old-api:8080 -l :18080 \
 ```
 
 Point your traffic to `localhost:18080` instead of the old API. All requests, responses, and database operations are recorded.
+
+#### Daemon Mode
+
+Run recording in the background and manage it with `stop` and `status`:
+
+```bash
+# Start daemon
+shadiff record -D -t http://localhost:8080 -l :18080 -s "long-run"
+
+# Check status
+shadiff record status
+shadiff record status -s "long-run"
+
+# Stop daemon
+shadiff record stop -s "long-run"
+```
 
 ### 2. Replay Traffic
 
@@ -194,7 +219,9 @@ All persistent data is stored under `~/.shadiff/`:
         ├── session.json               # Session metadata
         ├── records.jsonl              # Recorded behavior (JSONL streaming)
         ├── replay-records.jsonl       # Replay results
-        └── diff-results.json          # Diff results
+        ├── diff-results.json          # Diff results
+        ├── pidfile                    # Daemon PID file (daemon mode only)
+        └── daemon.log                 # Daemon stdout/stderr log (daemon mode only)
 ```
 
 ## DB Proxy Format

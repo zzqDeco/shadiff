@@ -35,6 +35,8 @@ shadiff/
 ├── cmd/                               # CLI 命令
 │   ├── root.go                        # Cobra 根命令，全局 flags
 │   ├── record.go                      # shadiff record
+│   ├── record_stop.go                 # shadiff record stop
+│   ├── record_status.go              # shadiff record status
 │   ├── replay.go                      # shadiff replay
 │   ├── diff.go                        # shadiff diff
 │   ├── report.go                      # shadiff report
@@ -76,6 +78,10 @@ shadiff/
 │   │   ├── terminal.go                # 终端彩色输出
 │   │   ├── json.go                    # JSON 格式
 │   │   └── html.go                    # HTML 报告（内嵌模板）
+│   ├── daemon/                        # 守护进程管理
+│   │   ├── pidfile.go                 # PID 文件读写/检查
+│   │   ├── process_unix.go            # Unix 进程分离 + 信号
+│   │   └── process_windows.go         # Windows 进程分离 + 信号
 │   └── logger/                        # 结构化日志
 │       └── logger.go                  # slog + 日志轮转
 ├── plan/                              # 开发路线图
@@ -116,6 +122,9 @@ shadiff record -t http://old-api:8080 -l :18080 -s "migration-v1"
 shadiff record -t http://old-api:8080 -l :18080 \
   --db-proxy mysql://:13306->:3306 -s "mysql-migration"
 
+# 以后台守护进程运行
+shadiff record -D -t http://old-api:8080 -l :18080 -s "bg-session"
+
 # 带 MongoDB 协议代理
 shadiff record -t http://old-api:8080 -l :18080 \
   --db-proxy mongo://:27018->:27017 -s "mongo-migration"
@@ -127,6 +136,22 @@ shadiff record -t http://old-api:8080 -l :18080 \
 ```
 
 将流量指向 `localhost:18080` 而非老 API。所有请求、响应和数据库操作都会被记录。
+
+#### 守护进程模式
+
+以后台方式运行录制，通过 `stop` 和 `status` 管理：
+
+```bash
+# 启动守护进程
+shadiff record -D -t http://localhost:8080 -l :18080 -s "long-run"
+
+# 查看状态
+shadiff record status
+shadiff record status -s "long-run"
+
+# 停止守护进程
+shadiff record stop -s "long-run"
+```
 
 ### 2. 回放流量
 
@@ -194,7 +219,9 @@ shadiff session delete <session-id>
         ├── session.json               # 会话元数据
         ├── records.jsonl              # 录制的行为记录（JSONL 流式）
         ├── replay-records.jsonl       # 回放结果
-        └── diff-results.json          # 对拍结果
+        ├── diff-results.json          # 对拍结果
+        ├── pidfile                    # 守护进程 PID 文件（仅守护模式）
+        └── daemon.log                 # 守护进程日志输出（仅守护模式）
 ```
 
 ## DB 代理格式

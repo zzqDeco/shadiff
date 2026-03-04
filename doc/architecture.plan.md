@@ -304,6 +304,8 @@ All three DB hooks follow the same architectural pattern: **transparent TCP prox
       records.jsonl                    # Recorded request/response pairs (JSONL)
       replay-records.jsonl             # Replayed request/response pairs (JSONL)
       diff-results.json                # Diff comparison results (JSON array, pretty-printed)
+      pidfile                          # Daemon PID file (daemon mode only)
+      daemon.log                       # Daemon output log (daemon mode only)
 ```
 
 ### 4.2 JSONL Streaming Format
@@ -408,3 +410,66 @@ Each JSONL line contains a complete `model.Record`:
 **Benefit**: Small binary size, fast compilation, minimal supply-chain risk. All protocol parsing, JSON diffing, HTML templating, and storage are implemented in-house using the Go standard library.
 
 **Tradeoff**: More code to maintain (e.g., the BSON parser, the JSON recursive differ). A library like `jsondiff` or `bson` would provide more robust handling at the cost of dependency weight.
+
+---
+
+## 6. Daemon Process Lifecycle
+
+### 6.1 Daemon Start (`--daemon` / `-D`)
+
+When `shadiff record -D` is invoked:
+
+```
+  User shell                         Background
+  ----------                         ----------
+  shadiff record -D -t http://...
+       |
+  [1] Create session + session dir
+  [2] Re-exec: shadiff record --_daemon-child --session {id}
+  [3] daemon.Detach() -- platform-specific:
+       Unix:    Setsid (new session)
+       Windows: CREATE_NEW_PROCESS_GROUP
+  [4] Child stdout/stderr -> {sessionDir}/daemon.log
+  [5] child.Start()
+  [6] Write PID to {sessionDir}/pidfile
+  [7] Print status, exit                   [Child runs recording proxy]
+                                           [Listens on --listen addr]
+                                           [Captures traffic to JSONL]
+```
+
+1. Parent creates the session and session directory in `~/.shadiff/sessions/`.
+2. Parent re-execs itself with `--_daemon-child --session {id}`, forwarding all relevant flags.
+3. Platform-specific detach is applied via `daemon.Detach()` (Unix: `Setsid`, Windows: `CREATE_NEW_PROCESS_GROUP`).
+4. Child stdout/stderr are redirected to `{sessionDir}/daemon.log`.
+5. Parent writes the child PID to `{sessionDir}/pidfile`.
+6. Parent exits immediately; the child continues running the recording proxy.
+
+### 6.2 Daemon Stop (`record stop`)
+
+```
+  shadiff record stop -s {session}
+       |
+  [1] Resolve session by name/ID
+  [2] Read PID from {sessionDir}/pidfile
+  [3] Check process liveness
+  [4] Send stop signal (SIGTERM / os.Interrupt)
+  [5] Poll for exit (up to 10s, every 500ms)
+  [6] Force kill if still alive
+  [7] Clean up PID file
+```
+
+1. Resolve session by name or ID using `findSession()`.
+2. Read PID from `{sessionDir}/pidfile`.
+3. Check if the process is alive. If already dead, clean up stale PID file and update session status.
+4. Send stop signal (SIGTERM on Unix, os.Interrupt on Windows).
+5. Wait up to 10 seconds for graceful shutdown (polling every 500ms).
+6. If still alive after timeout, force kill the process (SIGKILL on Unix, `proc.Kill()` on Windows).
+7. Clean up PID file and update session status to `completed`.
+
+### 6.3 PID File Management
+
+- **Written by**: parent process after child starts successfully.
+- **Removed by**: child process on graceful exit (`defer daemon.RemovePID()`).
+- **Stale detection**: `daemon.IsRunning()` checks process liveness; stale files are cleaned up by `record stop` and detected by `record status`.
+- **Location**: `~/.shadiff/sessions/{sessionID}/pidfile`.
+- **Format**: plain text file containing the PID as a decimal integer.
