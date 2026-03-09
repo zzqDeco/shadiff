@@ -198,13 +198,67 @@ shadiff session delete <session-id>
 
 应用配置存储于 `~/.shadiff/config.json`：
 
+优先级：
+
+```text
+CLI flag > config.json > 内置默认值
+```
+
+如果配置文件不存在，Shadiff 会在首次运行时自动创建。也可以通过 `--config /path/to/config.json` 指定其他配置文件。
+
 | 配置块 | 说明 |
 |--------|------|
-| `capture` | 代理设置（监听地址、超时） |
-| `replay` | 回放设置（并发数、延迟、超时） |
-| `diff` | 对比设置（默认规则、忽略模式） |
-| `storage` | 存储设置（数据目录） |
-| `log` | 日志设置（级别、目录、轮转） |
+| `capture` | `listenAddr`、`maxBodySize`、`excludePaths`、`dbProxies` |
+| `replay` | `concurrency`、`timeout`、`retryCount`、`delayMs` |
+| `diff` | `ignoreHeaders`、`ignoreOrder`、`maxDiffs`、`rules`、`rulesFile` |
+| `storage` | `dataDir`、`maxSessions` |
+| `log` | `level`、`logDir` |
+
+示例：
+
+```json
+{
+  "capture": {
+    "listenAddr": ":18080",
+    "maxBodySize": 1048576,
+    "excludePaths": ["/healthz"],
+    "dbProxies": [
+      {
+        "type": "mysql",
+        "listenAddr": ":13306",
+        "targetAddr": "127.0.0.1:3306"
+      }
+    ]
+  },
+  "replay": {
+    "concurrency": 5,
+    "timeout": "30s",
+    "retryCount": 1,
+    "delayMs": 100
+  },
+  "diff": {
+    "ignoreOrder": true,
+    "maxDiffs": 500,
+    "rulesFile": "rules.yaml"
+  },
+  "storage": {
+    "dataDir": "D:/shadiff-data",
+    "maxSessions": 100
+  },
+  "log": {
+    "level": "info",
+    "logDir": "D:/shadiff-data/logs"
+  }
+}
+```
+
+补充说明：
+
+- `capture.maxBodySize` 会截断录制下来的请求/响应 body，但会保留原始 `bodyLen`。
+- `capture.excludePaths` 会继续代理匹配路径，但不会录制这些 HTTP 请求。
+- `capture.dbProxies` 与 `--db-proxy` 使用同一格式。
+- `diff.rulesFile` 支持 JSON、YAML、YML。
+- `storage.maxSessions` 会在创建新会话前清理最旧的非录制中会话。
 
 ## 数据存储
 

@@ -198,13 +198,67 @@ shadiff session delete <session-id>
 
 App configuration is stored at `~/.shadiff/config.json`:
 
+Precedence:
+
+```text
+CLI flag > config.json > built-in defaults
+```
+
+If the config file does not exist, Shadiff creates it automatically on first run. You can also point to another file with `--config /path/to/config.json`.
+
 | Block | Description |
 |-------|-------------|
-| `capture` | Proxy settings (listen address, timeouts) |
-| `replay` | Replay settings (concurrency, delay, timeouts) |
-| `diff` | Diff settings (default rules, ignore patterns) |
-| `storage` | Storage settings (data directory) |
-| `log` | Logging settings (level, directory, rotation) |
+| `capture` | `listenAddr`, `maxBodySize`, `excludePaths`, `dbProxies` |
+| `replay` | `concurrency`, `timeout`, `retryCount`, `delayMs` |
+| `diff` | `ignoreHeaders`, `ignoreOrder`, `maxDiffs`, `rules`, `rulesFile` |
+| `storage` | `dataDir`, `maxSessions` |
+| `log` | `level`, `logDir` |
+
+Example:
+
+```json
+{
+  "capture": {
+    "listenAddr": ":18080",
+    "maxBodySize": 1048576,
+    "excludePaths": ["/healthz"],
+    "dbProxies": [
+      {
+        "type": "mysql",
+        "listenAddr": ":13306",
+        "targetAddr": "127.0.0.1:3306"
+      }
+    ]
+  },
+  "replay": {
+    "concurrency": 5,
+    "timeout": "30s",
+    "retryCount": 1,
+    "delayMs": 100
+  },
+  "diff": {
+    "ignoreOrder": true,
+    "maxDiffs": 500,
+    "rulesFile": "rules.yaml"
+  },
+  "storage": {
+    "dataDir": "D:/shadiff-data",
+    "maxSessions": 100
+  },
+  "log": {
+    "level": "info",
+    "logDir": "D:/shadiff-data/logs"
+  }
+}
+```
+
+Notes:
+
+- `capture.maxBodySize` truncates recorded request/response bodies but keeps the original `bodyLen`.
+- `capture.excludePaths` skips recording matching HTTP paths while still proxying them.
+- `capture.dbProxies` uses the same format as `--db-proxy`.
+- `diff.rulesFile` accepts JSON, YAML, or YML rule files.
+- `storage.maxSessions` prunes the oldest non-recording sessions before creating a new one.
 
 ## Data Storage
 
