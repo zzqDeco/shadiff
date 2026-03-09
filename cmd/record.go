@@ -22,6 +22,13 @@ import (
 )
 
 var (
+	execCommand       = exec.Command
+	currentExecutable = os.Executable
+	runDaemonParentFn = runDaemonParent
+	runRecordLoopFn   = runRecordLoop
+)
+
+var (
 	recordTarget   string
 	recordListen   string
 	recordSession  string
@@ -67,10 +74,10 @@ func runRecord(cmd *cobra.Command, args []string) error {
 	dataDir := currentDataDir()
 
 	if recordDaemon {
-		return runDaemonParent(cmd, dataDir, dbProxies)
+		return runDaemonParentFn(cmd, dataDir, dbProxies)
 	}
 
-	return runRecordLoop(dataDir, dbProxies)
+	return runRecordLoopFn(dataDir, dbProxies)
 }
 
 // runDaemonParent re-execs the current binary as a detached child process.
@@ -105,29 +112,12 @@ func runDaemonParent(cobraCmd *cobra.Command, dataDir string, dbProxies []config
 	sessionDir := filepath.Join(dataDir, "sessions", session.ID)
 
 	// Build child command with the same executable
-	executable, err := os.Executable()
+	executable, err := currentExecutable()
 	if err != nil {
 		return fmt.Errorf("failed to find executable: %w", err)
 	}
 
-	childArgs := []string{
-		"record",
-		"--target", recordTarget,
-		"--listen", recordListen,
-		"--session", session.ID,
-		"--_daemon-child",
-	}
-	if cfgFile != "" {
-		childArgs = append(childArgs, "--config", currentConfigPath())
-	}
-	if recordDuration != "" {
-		childArgs = append(childArgs, "--duration", recordDuration)
-	}
-	for _, db := range dbProxies {
-		childArgs = append(childArgs, "--db-proxy", fmt.Sprintf("%s://%s->%s", db.Type, db.ListenAddr, db.TargetAddr))
-	}
-
-	child := exec.Command(executable, childArgs...)
+	child := execCommand(executable, buildDaemonChildArgs(session.ID, dbProxies)...)
 
 	// Redirect stdout/stderr to daemon log file
 	logPath := filepath.Join(sessionDir, "daemon.log")
@@ -165,6 +155,26 @@ func runDaemonParent(cobraCmd *cobra.Command, dataDir string, dbProxies []config
 	fmt.Printf("Stop with: shadiff record stop -s %s\n", session.ID)
 
 	return nil
+}
+
+func buildDaemonChildArgs(sessionID string, dbProxies []config.DBProxyConfig) []string {
+	args := []string{
+		"record",
+		"--target", recordTarget,
+		"--listen", recordListen,
+		"--session", sessionID,
+		"--_daemon-child",
+	}
+	if cfgFile != "" {
+		args = append(args, "--config", currentConfigPath())
+	}
+	if recordDuration != "" {
+		args = append(args, "--duration", recordDuration)
+	}
+	for _, db := range dbProxies {
+		args = append(args, "--db-proxy", fmt.Sprintf("%s://%s->%s", db.Type, db.ListenAddr, db.TargetAddr))
+	}
+	return args
 }
 
 // runRecordLoop runs the actual recording proxy (foreground or daemon child).

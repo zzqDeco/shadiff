@@ -10,6 +10,8 @@ import (
 	"shadiff/internal/config"
 )
 
+var newDBHook = dbhook.NewHook
+
 func resolveRecordDBProxies(flagChanged bool, flagValues []string, cfg *config.AppConfig) ([]config.DBProxyConfig, error) {
 	if !flagChanged {
 		return append([]config.DBProxyConfig(nil), cfg.Capture.DBProxies...), nil
@@ -45,7 +47,7 @@ func parseDBProxySpec(spec string) (config.DBProxyConfig, error) {
 func startDBHooks(ctx context.Context, recorder *capture.Recorder, proxies []config.DBProxyConfig) ([]dbhook.DBHook, error) {
 	hooks := make([]dbhook.DBHook, 0, len(proxies))
 	for _, proxy := range proxies {
-		hook, err := dbhook.NewHook(dbhook.Config{
+		hook, err := newDBHook(dbhook.Config{
 			DBType:     proxy.Type,
 			ListenAddr: proxy.ListenAddr,
 			TargetAddr: proxy.TargetAddr,

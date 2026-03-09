@@ -37,9 +37,11 @@ This document maps every package, source file, and key implementation pattern in
 
 | File | Description |
 |------|-------------|
-| `root.go` | Root cobra command (`shadiff`); defines global flags (`--config`, `--verbose`, `--quiet`) and version string |
+| `root.go` | Root cobra command (`shadiff`); defines global flags (`--config`, `--verbose`, `--quiet`) and initializes runtime config in `PersistentPreRunE` |
 | `version.go` | `shadiff version` command; prints build-time injected Version, Commit, BuildDate |
-| `record.go` | `shadiff record` command; starts HTTP reverse proxy, creates session, captures traffic, handles graceful shutdown; supports `--daemon` mode via self-re-exec |
+| `runtime.go` | Shared runtime context for config path, loaded config, data directory, log directory, and flag-over-config precedence helpers |
+| `dbproxy.go` | Helper logic for `record` DB proxy parsing, config fallback, hook startup, and side-effect fan-in |
+| `record.go` | `shadiff record` command; resolves config-backed capture settings, starts HTTP reverse proxy plus DB hooks, and supports `--daemon` mode via self-re-exec |
 | `record_stop.go` | `shadiff record stop` subcommand; stops a daemon recording session by sending signals (SIGTERM/os.Interrupt), with graceful wait and force kill fallback; includes `findSession()` helper for ID/name resolution |
 | `record_status.go` | `shadiff record status` subcommand; lists all active recording sessions or shows detailed status for a specific session including PID, process liveness, record count, and uptime |
 | `replay.go` | `shadiff replay` command; resolves session, creates replay engine, executes replay, prints summary; also contains `resolveSession()` helper |
@@ -79,7 +81,8 @@ This document maps every package, source file, and key implementation pattern in
 | File | Description |
 |------|-------------|
 | `config.go` | Configuration schema types (`AppConfig`, `CaptureConfig`, `DBProxyConfig`, `ReplayConfig`, `DiffConfig`, `Rule`, `StorageConfig`, `LogConfig`); `DefaultConfig()` returns sensible defaults |
-| `store.go` | Thread-safe config store (`Store`); loads from / saves to `~/.shadiff/config.json`; provides `Get()`, `Update(fn)`, and `DataDir()` methods |
+| `store.go` | Thread-safe config store (`Store`); loads from / saves to the configured `config.json`, provides `Get()`, `Update(fn)`, and `DataDir()` methods |
+| `validate.go` | Startup validation for config values such as replay timeout, log level, diff limits, and DB proxy declarations |
 | `config_test.go` | Tests for configuration loading and defaults |
 
 ### `internal/diff/` -- Diff Engine
@@ -88,11 +91,13 @@ This document maps every package, source file, and key implementation pattern in
 |------|-------------|
 | `engine.go` | Core diff engine; loads recorded and replayed records, pairs by sequence number, compares status codes / headers / bodies / side effects; saves results via `DiffStore` |
 | `json.go` | `JSONDiffer` struct; recursive structural JSON comparison (objects, arrays, primitives); supports ordered and unordered array comparison with best-match pairing |
+| `rule_loader.go` | Converts config rules to diff rules and loads external rule files from JSON or YAML |
 | `rules.go` | `Rule`, `RuleSet`, `Matcher` interface; path-wildcard-to-regexp compilation; built-in matchers (Timestamp, UUID, NumericTolerance); `DefaultRules()`, `DefaultIgnoreHeaders()`, `FormatDiffSummary()`, `FormatPath()` |
 | `db.go` | `CompareDBSideEffects()` for SQL databases (MySQL/PostgreSQL); normalizes SQL (whitespace, case) before comparison; `filterByType()` helper |
 | `mongo.go` | `CompareMongoSideEffects()` for MongoDB; compares operation type, collection, and database name |
 | `json_test.go` | Tests for JSON structural diff |
 | `db_test.go` | Tests for SQL side effect comparison |
+| `rule_loader_test.go` | Tests for JSON/YAML rule loading and config-to-diff rule conversion |
 | `mongo_test.go` | Tests for MongoDB side effect comparison |
 | `rules_test.go` | Tests for rule matching and path wildcard compilation |
 
@@ -259,13 +264,14 @@ This function is reused by `replay`, `diff`, and `report` commands.
 
 ### 3.8 Configuration Layering
 
-**Location**: `internal/config/config.go`, `internal/config/store.go`
+**Location**: `cmd/runtime.go`, `internal/config/config.go`, `internal/config/store.go`, `internal/config/validate.go`
 
 Configuration follows a layered approach:
 
 1. `DefaultConfig()` provides sensible defaults (listen on `:18080`, 10 MB max body, 1 concurrency, 30s timeout, standard ignore headers).
-2. `Store.Load()` reads `~/.shadiff/config.json` and unmarshals on top of defaults (fields not present in the file retain default values).
-3. CLI flags override config values at runtime (flags are resolved in each command's `RunE` function).
+2. `Store.Load()` reads the selected config file and unmarshals on top of defaults (fields not present in the file retain default values).
+3. `config.Validate()` rejects unsupported values before command execution starts.
+4. `cmd/runtime.go` derives `DataDir` and `LogDir`, then exposes helper functions so each command can apply `CLI flag > config.json > default`.
 
 The `Store` is thread-safe (`sync.RWMutex`) and supports atomic updates via `Update(fn func(*AppConfig))`.
 
@@ -277,7 +283,7 @@ The `Store` is thread-safe (`sync.RWMutex`) and supports atomic updates via `Upd
 ~/.shadiff/
   config.json                          -- Application configuration
   logs/
-    shadiff-2024-01-15.log             -- Daily-rotated log file
+    shadiff-2024-01-15.log             -- Runtime log file
   sessions/
     {sessionID}/
       session.json                     -- Session metadata
@@ -300,8 +306,9 @@ Shadiff supports running the recording proxy as a background daemon using a **se
 
 1. **Parent process** (`--daemon` flag):
    - Creates the session and session directory.
+   - Resolves effective DB proxies before spawning the child.
    - Determines the current executable path via `os.Executable()`.
-   - Re-execs itself with `--_daemon-child --session {sessionID}` plus all relevant flags.
+   - Re-execs itself with `--_daemon-child --session {sessionID}` plus all effective flags, including `--config`, `--duration`, and `--db-proxy`.
    - Calls `daemon.Detach(cmd)` to configure platform-specific process group detach:
      - **Unix**: `SysProcAttr.Setsid = true` -- new session, detached from terminal.
      - **Windows**: `SysProcAttr.CreationFlags = CREATE_NEW_PROCESS_GROUP` -- new process group.
@@ -312,7 +319,7 @@ Shadiff supports running the recording proxy as a background daemon using a **se
 2. **Child process** (`--_daemon-child` flag):
    - Loads the pre-created session from storage by ID.
    - Updates the session PID to its own `os.Getpid()`.
-   - Runs the normal recording loop (proxy, signal handling, graceful shutdown).
+   - Runs the normal recording loop (HTTP proxy, DB hooks, signal handling, graceful shutdown).
    - On exit, removes the PID file via `defer daemon.RemovePID()`.
 
 3. **PID file lifecycle**:

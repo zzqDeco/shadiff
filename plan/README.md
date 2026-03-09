@@ -17,3 +17,4 @@
 | Phase 3 | Diff Engine (diff) | Completed |
 | Phase 4 | Reporting & DB Hooks (reporter/dbhook) | Completed |
 | Phase 5 | Config Runtime Integration (`plan/config-runtime-integration.plan.md`) | Completed |
+| Phase 6 | Test Hardening (`plan/test-hardening.plan.md`) | Completed |
