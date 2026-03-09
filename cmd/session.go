@@ -51,12 +51,7 @@ func init() {
 }
 
 func getStore() (*storage.FileStore, error) {
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get user home directory: %w", err)
-	}
-	dataDir := homeDir + "/.shadiff"
-	return storage.NewFileStore(dataDir)
+	return storage.NewFileStore(currentDataDir())
 }
 
 func runSessionList(cmd *cobra.Command, args []string) error {

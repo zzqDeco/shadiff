@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"time"
 
@@ -35,8 +34,7 @@ func init() {
 }
 
 func runRecordStatus(cmd *cobra.Command, args []string) error {
-	homeDir, _ := os.UserHomeDir()
-	dataDir := homeDir + "/.shadiff"
+	dataDir := currentDataDir()
 
 	store, err := storage.NewFileStore(dataDir)
 	if err != nil {

@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 )
@@ -18,13 +19,12 @@ var (
 
 // Init initializes the global logger. Logs are written to stderr and a daily-rotated file.
 // When daemonMode is true, logs are written only to the file (no stderr output).
-func Init(dataDir string, daemonMode ...bool) error {
+func Init(logDir, level string, daemonMode ...bool) error {
 	mu.Lock()
 	defer mu.Unlock()
 
 	isDaemon := len(daemonMode) > 0 && daemonMode[0]
 
-	logDir := filepath.Join(dataDir, "logs")
 	if err := os.MkdirAll(logDir, 0755); err != nil {
 		return fmt.Errorf("failed to create log directory: %w", err)
 	}
@@ -49,8 +49,18 @@ func Init(dataDir string, daemonMode ...bool) error {
 		writer = io.MultiWriter(os.Stderr, f)
 	}
 
+	slogLevel := slog.LevelInfo
+	switch strings.ToLower(level) {
+	case "debug":
+		slogLevel = slog.LevelDebug
+	case "warn":
+		slogLevel = slog.LevelWarn
+	case "error":
+		slogLevel = slog.LevelError
+	}
+
 	handler := slog.NewTextHandler(writer, &slog.HandlerOptions{
-		Level:     slog.LevelDebug,
+		Level:     slogLevel,
 		AddSource: false,
 	})
 

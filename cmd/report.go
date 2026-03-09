@@ -40,14 +40,12 @@ func init() {
 }
 
 func runReport(cmd *cobra.Command, args []string) error {
-	homeDir, _ := os.UserHomeDir()
-	dataDir := homeDir + "/.shadiff"
-	if err := logger.Init(dataDir); err != nil {
+	if err := logger.Init(currentLogDir(), effectiveLogLevel()); err != nil {
 		return fmt.Errorf("failed to initialize logger: %w", err)
 	}
 	defer logger.Close()
 
-	store, err := storage.NewFileStore(dataDir)
+	store, err := storage.NewFileStore(currentDataDir())
 	if err != nil {
 		return fmt.Errorf("failed to create storage: %w", err)
 	}

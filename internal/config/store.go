@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"sync"
@@ -16,19 +17,46 @@ type Store struct {
 
 // NewStore creates a config store instance, automatically loading or initializing default config.
 func NewStore() (*Store, error) {
+	return NewStoreWithPath("")
+}
+
+// DefaultPath returns the default config file path.
+func DefaultPath() (string, error) {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 	dir := filepath.Join(homeDir, ".shadiff")
+	return filepath.Join(dir, "config.json"), nil
+}
+
+// NewStoreWithPath creates a config store for the provided path.
+// If path is empty, ~/.shadiff/config.json is used.
+// Missing config files are initialized from defaults and written to disk.
+func NewStoreWithPath(path string) (*Store, error) {
+	if path == "" {
+		var err error
+		path, err = DefaultPath()
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return nil, err
 	}
 	s := &Store{
-		path: filepath.Join(dir, "config.json"),
+		path:   path,
+		config: DefaultConfig(),
 	}
 	if err := s.Load(); err != nil {
-		s.config = DefaultConfig()
+		if !errors.Is(err, os.ErrNotExist) {
+			return nil, err
+		}
+		if err := s.Save(); err != nil {
+			return nil, err
+		}
 	}
 	return s, nil
 }

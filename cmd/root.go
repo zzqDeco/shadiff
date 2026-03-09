@@ -26,6 +26,9 @@ Workflow:
   2. shadiff replay  — Replay recorded traffic to the new API
   3. shadiff diff    — Perform semantic-level comparison of behavioral differences
   4. shadiff report  — Generate a detailed diff report`,
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		return initRuntime()
+	},
 }
 
 // Execute runs the root command
