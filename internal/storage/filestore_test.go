@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"shadiff/internal/model"
 )
@@ -661,5 +662,40 @@ func TestSessionLifecycle(t *testing.T) {
 	_, err = fs.Get(id)
 	if err == nil {
 		t.Fatal("expected error after Delete, got nil")
+	}
+}
+
+func TestPruneOldest_RemovesOldCompletedSessions(t *testing.T) {
+	fs := newTestStore(t)
+
+	s1 := makeSession("oldest", model.SessionCompleted)
+	if err := fs.Create(s1); err != nil {
+		t.Fatalf("Create oldest: %v", err)
+	}
+	time.Sleep(5 * time.Millisecond)
+
+	s2 := makeSession("newer", model.SessionCompleted)
+	if err := fs.Create(s2); err != nil {
+		t.Fatalf("Create newer: %v", err)
+	}
+	time.Sleep(5 * time.Millisecond)
+
+	s3 := makeSession("recording", model.SessionRecording)
+	if err := fs.Create(s3); err != nil {
+		t.Fatalf("Create recording: %v", err)
+	}
+
+	if err := fs.PruneOldest(2); err != nil {
+		t.Fatalf("PruneOldest: %v", err)
+	}
+
+	if _, err := fs.Get(s1.ID); err == nil {
+		t.Fatal("expected oldest completed session to be pruned")
+	}
+	if _, err := fs.Get(s2.ID); err != nil {
+		t.Fatalf("expected newer completed session to remain: %v", err)
+	}
+	if _, err := fs.Get(s3.ID); err != nil {
+		t.Fatalf("expected recording session to remain: %v", err)
 	}
 }

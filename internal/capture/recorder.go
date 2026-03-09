@@ -77,6 +77,18 @@ func (r *Recorder) Stop() {
 	close(r.done)
 }
 
+// DropPendingSideEffects removes side effects that were captured but not yet
+// associated with a record. This is used when an HTTP path is intentionally
+// excluded from recording.
+func (r *Recorder) DropPendingSideEffects() int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	count := len(r.pendingEffects)
+	r.pendingEffects = nil
+	return count
+}
+
 // collectSideEffects collects side-effect events in the background
 func (r *Recorder) collectSideEffects() {
 	for {

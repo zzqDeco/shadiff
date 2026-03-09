@@ -129,6 +129,58 @@ func (fs *FileStore) Delete(id string) error {
 	return os.RemoveAll(dir)
 }
 
+// PruneOldest removes the oldest non-recording sessions until the total number
+// of sessions is at or below maxSessions.
+func (fs *FileStore) PruneOldest(maxSessions int) error {
+	if maxSessions < 1 {
+		return nil
+	}
+
+	fs.mu.Lock()
+	defer fs.mu.Unlock()
+
+	entries, err := os.ReadDir(fs.baseDir)
+	if err != nil {
+		return err
+	}
+
+	var sessions []model.Session
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		sess, err := fs.loadSession(entry.Name())
+		if err != nil {
+			continue
+		}
+		sessions = append(sessions, *sess)
+	}
+
+	if len(sessions) <= maxSessions {
+		return nil
+	}
+
+	sort.Slice(sessions, func(i, j int) bool {
+		return sessions[i].UpdatedAt < sessions[j].UpdatedAt
+	})
+
+	toDelete := len(sessions) - maxSessions
+	for _, sess := range sessions {
+		if toDelete == 0 {
+			break
+		}
+		if sess.Status == model.SessionRecording {
+			continue
+		}
+		if err := os.RemoveAll(filepath.Join(fs.baseDir, sess.ID)); err != nil {
+			return err
+		}
+		toDelete--
+	}
+
+	return nil
+}
+
 // --- RecordStore implementation ---
 
 // AppendRecord appends a record to the JSONL file

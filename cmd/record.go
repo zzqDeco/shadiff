@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"shadiff/internal/capture"
+	"shadiff/internal/config"
 	"shadiff/internal/daemon"
 	"shadiff/internal/logger"
 	"shadiff/internal/model"
@@ -57,22 +58,30 @@ func init() {
 }
 
 func runRecord(cmd *cobra.Command, args []string) error {
-	homeDir, _ := os.UserHomeDir()
-	dataDir := homeDir + "/.shadiff"
+	cfg := currentConfig()
+	recordListen = effectiveString(cmd.Flags().Changed("listen"), recordListen, cfg.Capture.ListenAddr)
+	dbProxies, err := resolveRecordDBProxies(cmd.Flags().Changed("db-proxy"), recordDBProxy, cfg)
+	if err != nil {
+		return err
+	}
+	dataDir := currentDataDir()
 
 	if recordDaemon {
-		return runDaemonParent(cmd, dataDir)
+		return runDaemonParent(cmd, dataDir, dbProxies)
 	}
 
-	return runRecordLoop(dataDir)
+	return runRecordLoop(dataDir, dbProxies)
 }
 
 // runDaemonParent re-execs the current binary as a detached child process.
-func runDaemonParent(cobraCmd *cobra.Command, dataDir string) error {
+func runDaemonParent(cobraCmd *cobra.Command, dataDir string, dbProxies []config.DBProxyConfig) error {
 	// Create storage and session first so the child can use --session
 	store, err := storage.NewFileStore(dataDir)
 	if err != nil {
 		return fmt.Errorf("failed to create storage: %w", err)
+	}
+	if err := store.PruneOldest(currentConfig().Storage.MaxSessions); err != nil {
+		return fmt.Errorf("failed to prune sessions: %w", err)
 	}
 
 	sessionName := recordSession
@@ -108,11 +117,14 @@ func runDaemonParent(cobraCmd *cobra.Command, dataDir string) error {
 		"--session", session.ID,
 		"--_daemon-child",
 	}
+	if cfgFile != "" {
+		childArgs = append(childArgs, "--config", currentConfigPath())
+	}
 	if recordDuration != "" {
 		childArgs = append(childArgs, "--duration", recordDuration)
 	}
-	for _, db := range recordDBProxy {
-		childArgs = append(childArgs, "--db-proxy", db)
+	for _, db := range dbProxies {
+		childArgs = append(childArgs, "--db-proxy", fmt.Sprintf("%s://%s->%s", db.Type, db.ListenAddr, db.TargetAddr))
 	}
 
 	child := exec.Command(executable, childArgs...)
@@ -156,11 +168,11 @@ func runDaemonParent(cobraCmd *cobra.Command, dataDir string) error {
 }
 
 // runRecordLoop runs the actual recording proxy (foreground or daemon child).
-func runRecordLoop(dataDir string) error {
+func runRecordLoop(dataDir string, dbProxies []config.DBProxyConfig) error {
 	isDaemonChild := daemonChild
 
 	// Initialize logger
-	if err := logger.Init(dataDir, isDaemonChild); err != nil {
+	if err := logger.Init(currentLogDir(), effectiveLogLevel(), isDaemonChild); err != nil {
 		return fmt.Errorf("failed to initialize logger: %w", err)
 	}
 	defer logger.Close()
@@ -187,6 +199,9 @@ func runRecordLoop(dataDir string) error {
 		defer daemon.RemovePID(sessionDir)
 	} else {
 		// Foreground mode: create session as before
+		if err := store.PruneOldest(currentConfig().Storage.MaxSessions); err != nil {
+			return fmt.Errorf("failed to prune sessions: %w", err)
+		}
 		sessionName := recordSession
 		if sessionName == "" {
 			sessionName = fmt.Sprintf("record-%s", time.Now().Format("20060102-150405"))
@@ -212,7 +227,10 @@ func runRecordLoop(dataDir string) error {
 	defer recorder.Stop()
 
 	// Create proxy
-	proxy, err := capture.NewProxy(recordTarget, recorder)
+	proxy, err := capture.NewProxy(recordTarget, recorder, capture.ProxyOptions{
+		MaxBodySize:         currentConfig().Capture.MaxBodySize,
+		ExcludePathPrefixes: currentConfig().Capture.ExcludePaths,
+	})
 	if err != nil {
 		return fmt.Errorf("failed to create proxy: %w", err)
 	}
@@ -236,6 +254,12 @@ func runRecordLoop(dataDir string) error {
 		ctx, cancel = context.WithTimeout(ctx, dur)
 		defer cancel()
 	}
+
+	hooks, err := startDBHooks(ctx, recorder, dbProxies)
+	if err != nil {
+		return fmt.Errorf("failed to start db hooks: %w", err)
+	}
+	defer stopDBHooks(hooks)
 
 	// Signal handling
 	sigCh := make(chan os.Signal, 1)

@@ -11,10 +11,10 @@ type AppConfig struct {
 
 // CaptureConfig holds capture settings.
 type CaptureConfig struct {
-	ListenAddr   string        `json:"listenAddr"`   // HTTP proxy listen address (default: ":18080")
-	MaxBodySize  int64         `json:"maxBodySize"`  // Max body recording size (bytes)
-	ExcludePaths []string      `json:"excludePaths"` // Excluded path prefixes
-	DBProxies    []DBProxyConfig `json:"dbProxies"`  // DB proxy configuration list
+	ListenAddr   string          `json:"listenAddr"`   // HTTP proxy listen address (default: ":18080")
+	MaxBodySize  int64           `json:"maxBodySize"`  // Max body recording size (bytes)
+	ExcludePaths []string        `json:"excludePaths"` // Excluded path prefixes
+	DBProxies    []DBProxyConfig `json:"dbProxies"`    // DB proxy configuration list
 }
 
 // DBProxyConfig holds database proxy settings.

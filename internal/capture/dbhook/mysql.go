@@ -24,9 +24,9 @@ type MySQLHook struct {
 
 // MySQL protocol constants
 const (
-	mysqlComQuery        = 0x03
-	mysqlComStmtPrepare  = 0x16
-	mysqlComStmtExecute  = 0x17
+	mysqlComQuery       = 0x03
+	mysqlComStmtPrepare = 0x16
+	mysqlComStmtExecute = 0x17
 )
 
 func NewMySQLHook(listenAddr, targetAddr string) *MySQLHook {

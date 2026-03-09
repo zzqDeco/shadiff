@@ -10,10 +10,11 @@ import (
 
 // Engine is the diff engine that compares behavioral differences between recorded and replayed records
 type Engine struct {
-	store       *storage.FileStore
-	sessionID   string
-	ruleSet     *RuleSet
-	jsonDiffer  *JSONDiffer
+	store         *storage.FileStore
+	sessionID     string
+	ruleSet       *RuleSet
+	jsonDiffer    *JSONDiffer
+	maxDiffs      int
 	ignoreHeaders map[string]bool
 }
 
@@ -23,6 +24,7 @@ type EngineConfig struct {
 	Rules         []Rule
 	IgnoreOrder   bool
 	IgnoreHeaders []string
+	MaxDiffs      int
 }
 
 // NewEngine creates a diff engine
@@ -36,19 +38,26 @@ func NewEngine(store *storage.FileStore, cfg EngineConfig) *Engine {
 		ignoreHeaders[h] = true
 	}
 
-	// Merge default rules with custom rules
-	allRules := cfg.Rules
+	// Merge default rules with custom rules.
+	allRules := DefaultRules().Rules
+	allRules = append(allRules, cfg.Rules...)
 	ruleSet := NewRuleSet(allRules,
 		TimestampMatcher{},
 		UUIDMatcher{},
 		NumericToleranceMatcher{Tolerance: 0.001},
 	)
 
+	maxDiffs := cfg.MaxDiffs
+	if maxDiffs <= 0 {
+		maxDiffs = 1000
+	}
+
 	return &Engine{
 		store:         store,
 		sessionID:     cfg.SessionID,
 		ruleSet:       ruleSet,
 		jsonDiffer:    &JSONDiffer{IgnoreOrder: cfg.IgnoreOrder},
+		maxDiffs:      maxDiffs,
 		ignoreHeaders: ignoreHeaders,
 	}
 }
@@ -171,6 +180,7 @@ func (e *Engine) compareRecords(original, replay model.Record) model.DiffResult 
 			break
 		}
 	}
+	diffs = e.limitDiffs(diffs, match)
 
 	return model.DiffResult{
 		RecordID:    original.ID,
@@ -179,6 +189,21 @@ func (e *Engine) compareRecords(original, replay model.Record) model.DiffResult 
 		Match:       match,
 		Differences: diffs,
 	}
+}
+
+func (e *Engine) limitDiffs(diffs []model.Difference, match bool) []model.Difference {
+	if len(diffs) <= e.maxDiffs {
+		return diffs
+	}
+
+	limited := append([]model.Difference(nil), diffs[:e.maxDiffs]...)
+	limited = append(limited, model.Difference{
+		Kind:     model.DiffBody,
+		Message:  fmt.Sprintf("differences truncated after %d items", e.maxDiffs),
+		Severity: model.SeverityInfo,
+		Ignored:  match,
+	})
+	return limited
 }
 
 // compareHeaders compares response headers

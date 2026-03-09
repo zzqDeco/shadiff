@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 	"time"
 
 	"shadiff/internal/logger"
@@ -45,16 +44,17 @@ func init() {
 }
 
 func runReplay(cmd *cobra.Command, args []string) error {
+	cfg := currentConfig()
+	replayConcurrency = effectiveInt(cmd.Flags().Changed("concurrency"), replayConcurrency, cfg.Replay.Concurrency)
+
 	// Initialize logger
-	homeDir, _ := os.UserHomeDir()
-	dataDir := homeDir + "/.shadiff"
-	if err := logger.Init(dataDir); err != nil {
+	if err := logger.Init(currentLogDir(), effectiveLogLevel()); err != nil {
 		return fmt.Errorf("failed to initialize logger: %w", err)
 	}
 	defer logger.Close()
 
 	// Create storage
-	store, err := storage.NewFileStore(dataDir)
+	store, err := storage.NewFileStore(currentDataDir())
 	if err != nil {
 		return fmt.Errorf("failed to create storage: %w", err)
 	}
@@ -67,11 +67,20 @@ func runReplay(cmd *cobra.Command, args []string) error {
 
 	// Parse delay
 	var delay time.Duration
-	if replayDelay != "" {
-		delay, err = time.ParseDuration(replayDelay)
+	delayText := replayDelay
+	if !cmd.Flags().Changed("delay") && cfg.Replay.DelayMs > 0 {
+		delayText = fmt.Sprintf("%dms", cfg.Replay.DelayMs)
+	}
+	if delayText != "" {
+		delay, err = time.ParseDuration(delayText)
 		if err != nil {
 			return fmt.Errorf("invalid delay: %w", err)
 		}
+	}
+
+	timeout, err := time.ParseDuration(cfg.Replay.Timeout)
+	if err != nil {
+		return fmt.Errorf("invalid replay timeout: %w", err)
 	}
 
 	// Create replay engine
@@ -79,6 +88,8 @@ func runReplay(cmd *cobra.Command, args []string) error {
 		SessionID:   sessionID,
 		TargetURL:   replayTarget,
 		Concurrency: replayConcurrency,
+		Timeout:     timeout,
+		RetryCount:  cfg.Replay.RetryCount,
 		Delay:       delay,
 	})
 

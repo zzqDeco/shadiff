@@ -17,14 +17,16 @@ import (
 // WorkerPool is a concurrent replay worker pool
 type WorkerPool struct {
 	concurrency int
+	retryCount  int
 	client      *http.Client
 	transform   TransformConfig
 }
 
 // NewWorkerPool creates a new worker pool
-func NewWorkerPool(concurrency int, timeout time.Duration, transform TransformConfig) *WorkerPool {
+func NewWorkerPool(concurrency int, timeout time.Duration, retryCount int, transform TransformConfig) *WorkerPool {
 	return &WorkerPool{
 		concurrency: concurrency,
+		retryCount:  retryCount,
 		client: &http.Client{
 			Timeout: timeout,
 		},
@@ -92,6 +94,9 @@ func (wp *WorkerPool) replayOne(original model.Record) ReplayResult {
 
 	startTime := time.Now()
 	resp, err := wp.client.Do(httpReq)
+	for attempt := 0; err != nil && attempt < wp.retryCount; attempt++ {
+		resp, err = wp.client.Do(Transform(original.Request, wp.transform))
+	}
 	duration := time.Since(startTime).Milliseconds()
 
 	if err != nil {

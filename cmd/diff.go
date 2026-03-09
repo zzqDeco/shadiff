@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 
 	"shadiff/internal/diff"
 	"shadiff/internal/logger"
@@ -43,16 +42,19 @@ func init() {
 }
 
 func runDiff(cmd *cobra.Command, args []string) error {
+	cfg := currentConfig()
+	diffIgnoreOrder = effectiveBool(cmd.Flags().Changed("ignore-order"), diffIgnoreOrder, cfg.Diff.IgnoreOrder)
+	diffIgnoreHeaders = effectiveStrings(cmd.Flags().Changed("ignore-headers"), diffIgnoreHeaders, cfg.Diff.IgnoreHeaders)
+	diffRulesFile = effectiveString(cmd.Flags().Changed("rules"), diffRulesFile, cfg.Diff.RulesFile)
+
 	// Initialize logger
-	homeDir, _ := os.UserHomeDir()
-	dataDir := homeDir + "/.shadiff"
-	if err := logger.Init(dataDir); err != nil {
+	if err := logger.Init(currentLogDir(), effectiveLogLevel()); err != nil {
 		return fmt.Errorf("failed to initialize logger: %w", err)
 	}
 	defer logger.Close()
 
 	// Create storage
-	store, err := storage.NewFileStore(dataDir)
+	store, err := storage.NewFileStore(currentDataDir())
 	if err != nil {
 		return fmt.Errorf("failed to create storage: %w", err)
 	}
@@ -63,11 +65,22 @@ func runDiff(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	rules := diff.RulesFromConfig(cfg.Diff.Rules)
+	if diffRulesFile != "" {
+		fileRules, err := diff.LoadRulesFile(diffRulesFile)
+		if err != nil {
+			return fmt.Errorf("load rules file: %w", err)
+		}
+		rules = append(rules, fileRules...)
+	}
+
 	// Create diff engine
 	engine := diff.NewEngine(store, diff.EngineConfig{
 		SessionID:     sessionID,
+		Rules:         rules,
 		IgnoreOrder:   diffIgnoreOrder,
 		IgnoreHeaders: diffIgnoreHeaders,
+		MaxDiffs:      cfg.Diff.MaxDiffs,
 	})
 
 	// Execute diff

@@ -186,9 +186,9 @@ func toFloat64(v any) (float64, bool) {
 func DefaultRules() *RuleSet {
 	rules := []Rule{
 		{
-			Name:  "ignore_timestamps",
-			Kind:  "custom",
-			Paths: []string{"**.createdAt", "**.updatedAt", "**.created_at", "**.updated_at", "**.timestamp"},
+			Name:    "ignore_timestamps",
+			Kind:    "custom",
+			Paths:   []string{"**.createdAt", "**.updatedAt", "**.created_at", "**.updated_at", "**.timestamp"},
 			Matcher: "timestamp",
 		},
 		{

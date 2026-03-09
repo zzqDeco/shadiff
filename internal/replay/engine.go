@@ -22,6 +22,7 @@ type EngineConfig struct {
 	TargetURL   string
 	Concurrency int
 	Timeout     time.Duration
+	RetryCount  int
 	Delay       time.Duration
 }
 
@@ -44,7 +45,7 @@ func NewEngine(store *storage.FileStore, cfg EngineConfig) *Engine {
 	return &Engine{
 		store:     store,
 		sessionID: cfg.SessionID,
-		pool:      NewWorkerPool(concurrency, timeout, transform),
+		pool:      NewWorkerPool(concurrency, timeout, cfg.RetryCount, transform),
 		delay:     cfg.Delay,
 	}
 }
