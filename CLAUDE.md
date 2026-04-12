@@ -63,9 +63,10 @@ All persistent data is stored under `~/.shadiff/`:
 
 ## Engineering Conventions
 
-### Branch Management (Trunk-based)
+### Branch Management (Integration branch flow)
 
-`master` is the main branch. All changes enter via pull request.
+`master` is the stable promotion branch and current default branch.
+`dev` is the integration branch for day-to-day changes.
 
 Branch naming:
 - `feature/<desc>` — new features
@@ -76,7 +77,10 @@ Branch naming:
 - `release/<version>` — release preparation
 
 Rules:
-- Feature branches are created from `master` and merged back
+- Feature branches are created from `dev`
+- Normal pull requests target `dev` first
+- Promote `dev` into `master` through a separate pull request
+- The repository currently does not use a `main` branch
 - Delete branches after merge
 - Keep branches short-lived
 
@@ -102,7 +106,7 @@ Every feature, fix, or improvement follows a plan-first, doc-synced workflow:
 
 1. **Plan** — Create or update a plan document in `plan/` describing the goal, scope, and approach
 2. **Select** — Choose specific items from the plan to implement in the current iteration
-3. **Implement** — Write code on a feature branch following the conventions above
+3. **Implement** — Write code on a short-lived branch created from `dev`
 4. **Test** — Write unit tests alongside implementation (`*_test.go`)
 5. **Sync Docs** — Update all affected documentation:
    - `doc/src/<file>.plan.md` for any modified source files (keep the 7-section template in sync)
@@ -122,7 +126,7 @@ Plan documents describe future work before implementation begins. Each plan shou
 - **Tasks** — Breakdown of implementation steps
 - **Verification** — How to confirm the implementation is correct
 
-`plan/README.md` serves as the index, tracking all phases and their status (Pending / In Progress / Completed).
+`plan/README.md` serves as the index, tracking active plan documents plus phase history and status (Pending / In Progress / Completed).
 
 ### Technical Documentation (`doc/`)
 
@@ -158,7 +162,7 @@ When modifying source files, update the corresponding doc file. When adding/remo
 
 ### Code Review Expectations
 
-- All PRs require review before merge
+- Feature PRs target `dev` unless the task is explicitly promoting `dev` into `master`
 - Reviewer checks: correctness, error handling, naming, test coverage
 - Follow standard Go conventions (gofmt, effective Go)
 - New interfaces must be documented in `doc/interfaces.plan.md`
