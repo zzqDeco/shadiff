@@ -12,7 +12,9 @@
 
 | Document | Description | Status |
 |----------|-------------|--------|
-| `plan/dev-branch-workflow.plan.md` | Establish `dev` as the integration branch while keeping `master` as the promotion baseline | In Progress |
+| `plan/replay-db-sideeffects.plan.md` | Close the DB side-effect replay and diff loop for MySQL, PostgreSQL, and MongoDB | Pending |
+| `plan/request-scoped-sideeffect-attribution.plan.md` | Replace next-record side-effect attachment with request-scoped attribution | Pending |
+| `plan/diff-ci-output.plan.md` | Make `shadiff diff` produce stable machine-readable output and CI-friendly exit codes | Pending |
 
 ## Phase History
 
