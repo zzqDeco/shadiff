@@ -64,7 +64,7 @@ For every feature, fix, or meaningful improvement, follow this sequence:
 
 1. Plan: create or update a plan document in `plan/` covering goal, scope, approach, tasks, and verification.
 2. Select: choose the specific plan items for the current iteration.
-3. Implement: make the code change on a short-lived branch when working with git branches.
+3. Implement: make the code change on a short-lived branch from `dev` when working with git branches.
 4. Test: add or update `*_test.go` tests alongside the implementation.
 5. Sync Docs: update all impacted documentation.
 6. Verify: run `go test ./...` and perform any relevant manual verification.
@@ -119,6 +119,18 @@ Plan documents live in `plan/`. Each plan should include:
 - Run `go test ./...` before finishing work unless the user explicitly limits verification.
 
 ## Git Conventions
+
+Base branches:
+
+- `master`: stable promotion branch and current default branch
+- `dev`: integration branch for day-to-day changes
+
+Workflow rules:
+
+- Create short-lived working branches from `dev`.
+- Open normal feature, fix, docs, refactor, test, and release-prep PRs into `dev` first.
+- Promote `dev` into `master` with a separate PR when the integration branch is ready.
+- The repository currently does not use a `main` branch.
 
 Branch naming:
 

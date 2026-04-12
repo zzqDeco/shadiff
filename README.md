@@ -108,6 +108,15 @@ cd shadiff
 go build -o shadiff .
 ```
 
+## Development Branch Flow
+
+- `master` is the stable promotion branch and the current default branch.
+- `dev` is the integration branch for ongoing work.
+- Create short-lived working branches from `dev`.
+- Open feature, fix, docs, refactor, and test PRs into `dev` first.
+- Promote `dev` into `master` with a separate PR when ready.
+- This repository currently does not use a `main` branch.
+
 ## Usage
 
 ### 1. Record Traffic

@@ -10,7 +10,9 @@
 
 ## Active Plan Documents
 
-None. Completed iteration plans are removed after closure.
+| Document | Description | Status |
+|----------|-------------|--------|
+| `plan/dev-branch-workflow.plan.md` | Establish `dev` as the integration branch while keeping `master` as the promotion baseline | In Progress |
 
 ## Phase History
 
