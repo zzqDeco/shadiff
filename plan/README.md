@@ -8,7 +8,11 @@
 | In Progress | Currently being implemented |
 | Completed | Done and verified |
 
-## Plan Documents
+## Active Plan Documents
+
+None. Completed iteration plans are removed after closure.
+
+## Phase History
 
 | Phase | Description | Status |
 |-------|-------------|--------|
@@ -16,5 +20,5 @@
 | Phase 2 | Core Record & Replay (capture/replay) | Completed |
 | Phase 3 | Diff Engine (diff) | Completed |
 | Phase 4 | Reporting & DB Hooks (reporter/dbhook) | Completed |
-| Phase 5 | Config Runtime Integration (`plan/config-runtime-integration.plan.md`) | Completed |
-| Phase 6 | Test Hardening (`plan/test-hardening.plan.md`) | Completed |
+| Phase 5 | Config Runtime Integration | Completed |
+| Phase 6 | Test Hardening | Completed |
