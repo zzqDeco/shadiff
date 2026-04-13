@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"shadiff/internal/model"
 	"shadiff/internal/storage"
@@ -153,5 +154,50 @@ func TestProxy_ExcludePathSkipsRecording(t *testing.T) {
 	}
 	if upstreamBody != requestBody {
 		t.Fatalf("upstream body = %q, want %q", upstreamBody, requestBody)
+	}
+}
+
+func TestProxy_ExcludedPathsDoNotInheritUnrelatedSideEffects(t *testing.T) {
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ok"))
+	}))
+	defer target.Close()
+
+	store, session := newProxyTestStore(t)
+	recorder := NewRecorder(session.ID, store)
+	defer recorder.Stop()
+
+	proxy, err := NewProxy(target.URL, recorder, ProxyOptions{ExcludePathPrefixes: []string{"/health"}})
+	if err != nil {
+		t.Fatalf("NewProxy() error: %v", err)
+	}
+
+	recorder.SideEffectChan() <- model.SideEffect{
+		Type:      model.SideEffectDB,
+		DBType:    "mysql",
+		Query:     "SELECT orphan",
+		Timestamp: 1,
+	}
+
+	skippedReq := httptest.NewRequest(http.MethodGet, "http://proxy.local/healthz", nil)
+	skippedResp := httptest.NewRecorder()
+	proxy.ServeHTTP(skippedResp, skippedReq)
+
+	time.Sleep(5 * time.Millisecond)
+
+	recordedReq := httptest.NewRequest(http.MethodGet, "http://proxy.local/api", nil)
+	recordedResp := httptest.NewRecorder()
+	proxy.ServeHTTP(recordedResp, recordedReq)
+
+	records, err := store.ListRecords(session.ID)
+	if err != nil {
+		t.Fatalf("ListRecords() error: %v", err)
+	}
+	if len(records) != 1 {
+		t.Fatalf("records len = %d, want 1", len(records))
+	}
+	if len(records[0].SideEffects) != 0 {
+		t.Fatalf("sideEffects len = %d, want 0", len(records[0].SideEffects))
 	}
 }

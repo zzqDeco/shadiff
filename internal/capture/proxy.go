@@ -59,11 +59,7 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	if p.shouldSkip(r.URL.Path) {
 		p.proxy.ServeHTTP(w, r)
-		dropped := p.recorder.DropPendingSideEffects()
-		logger.Info("capture skipped by path rule",
-			"path", r.URL.Path,
-			"dropped_side_effects", dropped,
-		)
+		logger.Info("capture skipped by path rule", "path", r.URL.Path)
 		return
 	}
 
@@ -79,6 +75,7 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	reqPath := r.URL.Path
 	reqQuery := r.URL.RawQuery
 	reqHeaders := cloneHeaders(r.Header)
+	scopeID := p.recorder.BeginRequestScope(startTime.UnixMilli())
 
 	// Build HTTPRequest
 	httpReq := model.HTTPRequest{
@@ -122,13 +119,13 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		RecordedAt:  time.Now().UnixMilli(),
 	}
 
-	if err := p.recorder.Record(record); err != nil {
+	if err := p.recorder.FinishRequestScope(scopeID, record); err != nil {
 		logger.Error("record failed", err, "sequence", seq)
 	}
 
 	logger.CaptureEvent("request_captured",
-		"method", r.Method,
-		"path", r.URL.Path,
+		"method", reqMethod,
+		"path", reqPath,
 		"status", rr.statusCode,
 		"duration_ms", duration,
 		"sequence", seq,

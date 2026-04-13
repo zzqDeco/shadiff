@@ -63,8 +63,8 @@ Stages are decoupled -- they can be run independently, at different times, even 
    - A monotonically increasing sequence number (atomic counter)
    - Duration in milliseconds
    - An 8-character UUID as record ID
-4. The record is passed to `capture.Recorder.Record()`.
-5. The Recorder attaches any pending side effects (collected from DB hooks), then calls `FileStore.AppendRecord()`.
+4. The proxy closes the request scope in `capture.Recorder` and passes the completed record for persistence.
+5. The Recorder flushes side effects collected from DB hooks, attaches those whose timestamps fall within the request scope, and then calls `FileStore.AppendRecord()`.
 6. `FileStore` serializes the record as a single JSON line and appends it to `records.jsonl` with file-level mutex protection.
 
 ### 2.2 Side-Effect Capture (DB Hooks)
@@ -85,8 +85,8 @@ Stages are decoupled -- they can be run independently, at different times, even 
                               v
                        +------+------+
                        |  Recorder   |
-                       | (pending    |
-                       |  effects)   |
+                       | (request    |
+                       |  scopes)    |
                        +-------------+
 ```
 
@@ -97,8 +97,8 @@ DB hooks operate as TCP proxies that sit between the application and the real da
 3. Forward all traffic bidirectionally (`io.Copy` for server-to-client).
 4. Sniff client-to-server traffic to extract query information.
 5. Emit `model.SideEffect` structs on a buffered channel.
-6. The `Recorder`'s background goroutine drains this channel into a `pendingEffects` slice.
-7. When the next HTTP record is saved, pending effects are attached to it.
+6. The `Recorder`'s background goroutine drains this channel and attributes each effect to the best matching request scope by timestamp.
+7. When the HTTP record is finalized, only the effects attributed to that request scope are attached.
 
 ### 2.3 Replay Phase
 

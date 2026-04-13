@@ -4,6 +4,10 @@
 
 Replace the current "attach pending side effects to the next record" behavior with deterministic request-scoped attribution so recorded side effects are assigned to the HTTP request that actually produced them.
 
+## Current Iteration
+
+This iteration implements the recorder request-scope lifecycle, timestamp-based attribution, orphan handling, and the proxy integration needed to stop leaking DB side effects into later requests.
+
 ## Scope
 
 In scope:

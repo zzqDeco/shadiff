@@ -394,18 +394,18 @@ Database side effects flow through Go channels, not through the filesystem direc
 DBHook.SideEffects()  -->  chan model.SideEffect (buffered, cap 1000)
                                      |
                                      v
-                           Recorder.sideEffectCh  (background goroutine collects into pendingEffects)
+                           Recorder.sideEffectCh  (background goroutine attributes into request scopes)
                                      |
                                      v
-                           Recorder.Record()  (attaches pendingEffects to the current Record)
+                   Recorder.FinishRequestScope()  (attaches scope effects to the current Record)
                                      |
                                      v
                            FileStore.AppendRecord()  (serialized into records.jsonl)
 ```
 
 1. Each `DBHook` implementation (MySQL, PostgreSQL, MongoDB) emits `model.SideEffect` values on a buffered channel (capacity 1000). If the channel is full, the side effect is dropped with a warning log.
-2. The `Recorder` runs a background goroutine (`collectSideEffects`) that drains the channel and accumulates side effects into `pendingEffects` (mutex-protected).
-3. When `Recorder.Record()` is called (triggered by the HTTP proxy after each request/response round-trip), it atomically moves all `pendingEffects` onto the `Record.SideEffects` slice, then appends the complete record to storage.
+2. The `Recorder` runs a background goroutine (`collectSideEffects`) that drains the channel and attributes each effect to the best matching request scope (mutex-protected).
+3. When `Recorder.FinishRequestScope()` is called (triggered by the HTTP proxy after each request/response round-trip), it flushes collector backlog, attaches only the effects attributed to that request scope, then appends the complete record to storage.
 4. On `Recorder.Stop()`, the background goroutine drains any remaining channel items before exiting.
 
 ### 3.3 JSONL for Persistence
@@ -449,7 +449,7 @@ After raw differences are computed, the `RuleSet.Apply()` method processes them:
 
 | Producer | Consumer | Contract | Medium |
 |----------|----------|----------|--------|
-| `Proxy` | `Recorder` | `Recorder.Record(*model.Record)` | Direct method call |
+| `Proxy` | `Recorder` | `Recorder.BeginRequestScope(int64)` / `Recorder.FinishRequestScope(int64, *model.Record)` | Direct method call |
 | `DBHook` | `Recorder` | `model.SideEffect` | Buffered channel (cap 1000) |
 | `Recorder` | `FileStore` | `AppendRecord(sessionID, *model.Record)` | JSONL file append |
 | `replay.Engine` | `FileStore` | `AppendReplayRecord(sessionID, *model.Record)` | JSONL file append |
