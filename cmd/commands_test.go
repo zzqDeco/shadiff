@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -8,7 +9,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	"shadiff/internal/capture/dbhook"
 	"shadiff/internal/config"
 	"shadiff/internal/daemon"
 	"shadiff/internal/model"
@@ -92,6 +95,7 @@ func TestResolveSession_UsesLatestByName(t *testing.T) {
 	if err := store.Create(second); err != nil {
 		t.Fatalf("Create(second) error: %v", err)
 	}
+	time.Sleep(2 * time.Millisecond)
 	if err := store.Update(second); err != nil {
 		t.Fatalf("Update(second) error: %v", err)
 	}
@@ -148,8 +152,9 @@ func TestRunReplay_ReplaysAndUpdatesSession(t *testing.T) {
 	replayDelay = ""
 
 	cmd := &cobra.Command{}
-	cmd.Flags().Int("concurrency", 1, "")
-	cmd.Flags().String("delay", "", "")
+	cmd.Flags().IntVar(&replayConcurrency, "concurrency", 1, "")
+	cmd.Flags().StringVar(&replayDelay, "delay", "", "")
+	cmd.Flags().StringArrayVar(&replayDBProxy, "db-proxy", nil, "")
 
 	if err := runReplay(cmd, nil); err != nil {
 		t.Fatalf("runReplay() error: %v", err)
@@ -169,6 +174,86 @@ func TestRunReplay_ReplaysAndUpdatesSession(t *testing.T) {
 	}
 	if len(replays) != 1 {
 		t.Fatalf("len(replays) = %d, want 1", len(replays))
+	}
+}
+
+func TestRunReplay_DBProxyRequiresSerialConcurrency(t *testing.T) {
+	withRuntimeConfig(t, nil)
+
+	replaySession = ""
+	replayTarget = "http://example.com"
+	replayConcurrency = 2
+	replayDelay = ""
+	replayDBProxy = nil
+
+	cmd := &cobra.Command{}
+	cmd.Flags().IntVar(&replayConcurrency, "concurrency", 1, "")
+	cmd.Flags().StringVar(&replayDelay, "delay", "", "")
+	cmd.Flags().StringArrayVar(&replayDBProxy, "db-proxy", nil, "")
+	if err := cmd.Flags().Set("concurrency", "2"); err != nil {
+		t.Fatalf("Set(concurrency) error: %v", err)
+	}
+	if err := cmd.Flags().Set("db-proxy", "mysql://:13307->127.0.0.1:3306"); err != nil {
+		t.Fatalf("Set(db-proxy) error: %v", err)
+	}
+
+	err := runReplay(cmd, nil)
+	if err == nil || !strings.Contains(err.Error(), "require concurrency 1") {
+		t.Fatalf("runReplay() error = %v, want concurrency validation", err)
+	}
+}
+
+func TestRunReplay_DBProxyStartsHooks(t *testing.T) {
+	withRuntimeConfig(t, nil)
+	store := newStoreForRuntime(t)
+	session := &model.Session{Name: "replay-db-proxy", Status: model.SessionRecording}
+	if err := store.Create(session); err != nil {
+		t.Fatalf("Create() error: %v", err)
+	}
+	if err := store.AppendRecord(session.ID, &model.Record{
+		ID:        "orig-1",
+		SessionID: session.ID,
+		Sequence:  1,
+		Request:   model.HTTPRequest{Method: "GET", Path: "/hello"},
+	}); err != nil {
+		t.Fatalf("AppendRecord() error: %v", err)
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ok"))
+	}))
+	defer server.Close()
+
+	fakeHook := &fakeDBHook{sideEffects: make(chan model.SideEffect)}
+	oldFactory := newDBHook
+	defer func() { newDBHook = oldFactory }()
+	newDBHook = func(cfg dbhook.Config) (dbhook.DBHook, error) {
+		return fakeHook, nil
+	}
+
+	replaySession = session.Name
+	replayTarget = server.URL
+	replayConcurrency = 1
+	replayDelay = ""
+	replayDBProxy = nil
+
+	cmd := &cobra.Command{}
+	cmd.Flags().IntVar(&replayConcurrency, "concurrency", 1, "")
+	cmd.Flags().StringVar(&replayDelay, "delay", "", "")
+	cmd.Flags().StringArrayVar(&replayDBProxy, "db-proxy", nil, "")
+	if err := cmd.Flags().Set("db-proxy", "mysql://:13307->127.0.0.1:3306"); err != nil {
+		t.Fatalf("Set(db-proxy) error: %v", err)
+	}
+
+	if err := runReplay(cmd, nil); err != nil {
+		t.Fatalf("runReplay() error: %v", err)
+	}
+	if !fakeHook.startInvoked {
+		t.Fatal("expected replay db hook to start")
+	}
+	if !fakeHook.stopped {
+		t.Fatal("expected replay db hook to stop")
 	}
 }
 
@@ -209,6 +294,7 @@ func TestRunDiff_UsesConfigIgnoreOrder(t *testing.T) {
 	cmd.Flags().Bool("ignore-order", false, "")
 	cmd.Flags().StringArray("ignore-headers", nil, "")
 	cmd.Flags().String("rules", "", "")
+	cmd.Flags().String("output", "terminal", "")
 
 	output := captureStdout(t, func() {
 		if err := runDiff(cmd, nil); err != nil {
@@ -217,6 +303,110 @@ func TestRunDiff_UsesConfigIgnoreOrder(t *testing.T) {
 	})
 	if !strings.Contains(output, "[MATCH]") {
 		t.Fatalf("output = %q, want MATCH", output)
+	}
+}
+
+func TestRunDiff_OutputsJSON(t *testing.T) {
+	withRuntimeConfig(t, nil)
+	store := newStoreForRuntime(t)
+	session := &model.Session{Name: "diff-json-case", Status: model.SessionReplayed}
+	if err := store.Create(session); err != nil {
+		t.Fatalf("Create() error: %v", err)
+	}
+	if err := store.AppendRecord(session.ID, &model.Record{
+		ID:        "orig-1",
+		SessionID: session.ID,
+		Sequence:  1,
+		Request:   model.HTTPRequest{Method: "GET", Path: "/items"},
+		Response:  model.HTTPResponse{StatusCode: 200, Body: []byte(`{"items":[1,2]}`)},
+	}); err != nil {
+		t.Fatalf("AppendRecord() error: %v", err)
+	}
+	if err := store.AppendReplayRecord(session.ID, &model.Record{
+		ID:        "rep-1",
+		SessionID: session.ID,
+		Sequence:  1,
+		Request:   model.HTTPRequest{Method: "GET", Path: "/items"},
+		Response:  model.HTTPResponse{StatusCode: 200, Body: []byte(`{"items":[1,2]}`)},
+	}); err != nil {
+		t.Fatalf("AppendReplayRecord() error: %v", err)
+	}
+
+	diffSession = session.Name
+	diffRulesFile = ""
+	diffIgnoreOrder = false
+	diffIgnoreHeaders = nil
+	diffOutput = "terminal"
+
+	cmd := &cobra.Command{}
+	cmd.Flags().Bool("ignore-order", false, "")
+	cmd.Flags().StringArray("ignore-headers", nil, "")
+	cmd.Flags().String("rules", "", "")
+	cmd.Flags().String("output", "json", "")
+
+	output := captureStdout(t, func() {
+		if err := runDiff(cmd, nil); err != nil {
+			t.Fatalf("runDiff() error: %v", err)
+		}
+	})
+
+	var report struct {
+		Summary model.DiffSummary  `json:"summary"`
+		Results []model.DiffResult `json:"results"`
+	}
+	if err := json.Unmarshal([]byte(output), &report); err != nil {
+		t.Fatalf("expected JSON output, got error: %v\noutput=%s", err, output)
+	}
+	if report.Summary.SessionID != session.ID {
+		t.Fatalf("summary sessionID = %q, want %q", report.Summary.SessionID, session.ID)
+	}
+	if len(report.Results) != 1 {
+		t.Fatalf("len(results) = %d, want 1", len(report.Results))
+	}
+}
+
+func TestRunDiff_InvalidOutputReturnsError(t *testing.T) {
+	withRuntimeConfig(t, nil)
+	store := newStoreForRuntime(t)
+	session := &model.Session{Name: "diff-invalid-output", Status: model.SessionReplayed}
+	if err := store.Create(session); err != nil {
+		t.Fatalf("Create() error: %v", err)
+	}
+	if err := store.AppendRecord(session.ID, &model.Record{
+		ID:        "orig-1",
+		SessionID: session.ID,
+		Sequence:  1,
+		Request:   model.HTTPRequest{Method: "GET", Path: "/items"},
+		Response:  model.HTTPResponse{StatusCode: 200, Body: []byte(`{"items":[1]}`)},
+	}); err != nil {
+		t.Fatalf("AppendRecord() error: %v", err)
+	}
+	if err := store.AppendReplayRecord(session.ID, &model.Record{
+		ID:        "rep-1",
+		SessionID: session.ID,
+		Sequence:  1,
+		Request:   model.HTTPRequest{Method: "GET", Path: "/items"},
+		Response:  model.HTTPResponse{StatusCode: 200, Body: []byte(`{"items":[1]}`)},
+	}); err != nil {
+		t.Fatalf("AppendReplayRecord() error: %v", err)
+	}
+
+	diffSession = session.Name
+	diffRulesFile = ""
+	diffIgnoreOrder = false
+	diffIgnoreHeaders = nil
+	diffOutput = "terminal"
+
+	cmd := &cobra.Command{}
+	cmd.Flags().Bool("ignore-order", false, "")
+	cmd.Flags().StringArray("ignore-headers", nil, "")
+	cmd.Flags().String("rules", "", "")
+	cmd.Flags().String("output", "xml", "")
+
+	if err := runDiff(cmd, nil); err == nil {
+		t.Fatal("expected invalid output format to return an error")
+	} else if !strings.Contains(err.Error(), "unsupported diff output format") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 

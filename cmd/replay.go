@@ -1,9 +1,11 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"time"
 
+	"shadiff/internal/capture/dbhook"
 	"shadiff/internal/logger"
 	"shadiff/internal/model"
 	"shadiff/internal/replay"
@@ -46,6 +48,13 @@ func init() {
 func runReplay(cmd *cobra.Command, args []string) error {
 	cfg := currentConfig()
 	replayConcurrency = effectiveInt(cmd.Flags().Changed("concurrency"), replayConcurrency, cfg.Replay.Concurrency)
+	dbProxies, err := resolveReplayDBProxies(cmd.Flags().Changed("db-proxy"), replayDBProxy)
+	if err != nil {
+		return err
+	}
+	if len(dbProxies) > 0 && replayConcurrency > 1 {
+		return fmt.Errorf("replay db proxies require concurrency 1, got %d", replayConcurrency)
+	}
 
 	// Initialize logger
 	if err := logger.Init(currentLogDir(), effectiveLogLevel()); err != nil {
@@ -83,14 +92,35 @@ func runReplay(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("invalid replay timeout: %w", err)
 	}
 
+	var (
+		sideEffectCh chan model.SideEffect
+		hooks        *dbhook.Group
+		hookCancel   context.CancelFunc
+	)
+	if len(dbProxies) > 0 {
+		sideEffectCh = make(chan model.SideEffect, 4096)
+		hookCtx, cancel := context.WithCancel(context.Background())
+		hookCancel = cancel
+		hooks, err = startDBHooks(hookCtx, sideEffectCh, dbProxies)
+		if err != nil {
+			hookCancel()
+			return fmt.Errorf("failed to start replay db hooks: %w", err)
+		}
+		defer hookCancel()
+		defer stopDBHooks(hooks)
+	}
+
 	// Create replay engine
 	engine := replay.NewEngine(store, replay.EngineConfig{
-		SessionID:   sessionID,
-		TargetURL:   replayTarget,
-		Concurrency: replayConcurrency,
-		Timeout:     timeout,
-		RetryCount:  cfg.Replay.RetryCount,
-		Delay:       delay,
+		SessionID:    sessionID,
+		TargetURL:    replayTarget,
+		Concurrency:  replayConcurrency,
+		Timeout:      timeout,
+		RetryCount:   cfg.Replay.RetryCount,
+		Delay:        delay,
+		SideEffectCh: sideEffectCh,
+		Flusher:      hooks,
+		FlushTimeout: dbhook.DefaultFlushTimeout,
 	})
 
 	// Execute replay

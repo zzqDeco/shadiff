@@ -189,3 +189,54 @@ func TestCLI_DiffUsesConfigIgnoreOrder(t *testing.T) {
 		t.Fatalf("stdout = %q, want MATCH result", stdout)
 	}
 }
+
+func TestCLI_DiffOutputsJSON(t *testing.T) {
+	dataDir := filepath.Join(t.TempDir(), "data")
+	configPath := writeConfigFile(t, dataDir, nil)
+	store := createSessionStore(t, dataDir)
+
+	session := &model.Session{Name: "diff-json-cli", Status: model.SessionReplayed}
+	if err := store.Create(session); err != nil {
+		t.Fatalf("Create() error: %v", err)
+	}
+
+	original := &model.Record{
+		ID:        "orig-1",
+		SessionID: session.ID,
+		Sequence:  1,
+		Request:   model.HTTPRequest{Method: "GET", Path: "/items"},
+		Response:  model.HTTPResponse{StatusCode: 200, Body: []byte(`{"items":[1,2]}`)},
+	}
+	replayed := &model.Record{
+		ID:        "replay-1",
+		SessionID: session.ID,
+		Sequence:  1,
+		Request:   original.Request,
+		Response:  model.HTTPResponse{StatusCode: 200, Body: []byte(`{"items":[1,2]}`)},
+	}
+	if err := store.AppendRecord(session.ID, original); err != nil {
+		t.Fatalf("AppendRecord() error: %v", err)
+	}
+	if err := store.AppendReplayRecord(session.ID, replayed); err != nil {
+		t.Fatalf("AppendReplayRecord() error: %v", err)
+	}
+
+	stdout, stderr, err := runCLI(t, "--config", configPath, "diff", "-s", session.Name, "-o", "json")
+	if err != nil {
+		t.Fatalf("runCLI() error: %v\nstderr=%s", err, stderr)
+	}
+
+	var report struct {
+		Summary model.DiffSummary  `json:"summary"`
+		Results []model.DiffResult `json:"results"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &report); err != nil {
+		t.Fatalf("expected JSON stdout, got error: %v\nstdout=%s", err, stdout)
+	}
+	if report.Summary.SessionID != session.ID {
+		t.Fatalf("summary sessionID = %q, want %q", report.Summary.SessionID, session.ID)
+	}
+	if len(report.Results) != 1 {
+		t.Fatalf("len(results) = %d, want 1", len(report.Results))
+	}
+}

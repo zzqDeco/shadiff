@@ -145,6 +145,7 @@ shadiff record -t http://old-api:8080 -l :18080 \
 ```
 
 将流量指向 `localhost:18080` 而非老 API。所有请求、响应和数据库操作都会被记录。
+当录制启用 DB 代理时，Shadiff 会在每个请求 scope 关闭前先 flush DB hook 投递的副作用，尽量减少“窗口内发生、稍后送达”的副作用丢失。
 
 #### 守护进程模式
 
@@ -168,7 +169,12 @@ shadiff record stop -s "long-run"
 
 ```bash
 shadiff replay -s "migration-v1" -t http://new-api:9090 -c 5
+shadiff replay -s "migration-v1" -t http://new-api:9090 \
+  --db-proxy mysql://:13307->:3306
 ```
+
+当 replay 启用 `--db-proxy` 时，DB side effect 会写入 `replay-records.jsonl`，并且回放必须保持串行（`--concurrency 1`）。
+回放在每条请求窗口收口前也会先 flush DB-hook telemetry，让语义 diff 更稳定地拿到窗口内的 SQL 和 Mongo 副作用。
 
 ### 3. 对比结果
 
@@ -180,6 +186,9 @@ shadiff diff -s "migration-v1"
 
 # 使用自定义规则（忽略时间戳、UUID）
 shadiff diff -s "migration-v1" -r rules.yaml --ignore-order
+
+# 面向脚本/CI 的 JSON 输出
+shadiff diff -s "migration-v1" -o json
 ```
 
 ### 4. 生成报告
@@ -263,7 +272,8 @@ CLI flag > config.json > 内置默认值
 
 补充说明：
 
-- `capture.maxBodySize` 会截断录制下来的请求/响应 body，但会保留原始 `bodyLen`。
+- `capture.maxBodySize` 会截断录制下来的请求/响应 body 预览，但会保留原始 `bodyLen`。
+- 当请求 body 的内联预览被截断时，Shadiff 会在 session 目录下保存完整请求体，并在 replay 时自动优先使用该 artifact。
 - `capture.excludePaths` 会继续代理匹配路径，但不会录制这些 HTTP 请求。
 - `capture.dbProxies` 与 `--db-proxy` 使用同一格式。
 - `diff.rulesFile` 支持 JSON、YAML、YML。
@@ -283,6 +293,8 @@ CLI flag > config.json > 内置默认值
         ├── records.jsonl              # 录制的行为记录（JSONL 流式）
         ├── replay-records.jsonl       # 回放结果
         ├── diff-results.json          # 对拍结果
+        ├── artifacts/
+        │   └── request-bodies/        # 用于忠实 replay 的完整请求体 artifact
         ├── pidfile                    # 守护进程 PID 文件（仅守护模式）
         └── daemon.log                 # 守护进程日志输出（仅守护模式）
 ```

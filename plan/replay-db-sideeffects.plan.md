@@ -4,14 +4,29 @@
 
 Close the database side-effect loop across `record -> replay -> diff` so replayed traffic can capture MySQL, PostgreSQL, and MongoDB side effects and compare them semantically.
 
+## Current Iteration
+
+This iteration implements the review-finding subset:
+
+- `replay --db-proxy` becomes a real capability driven by CLI flags
+- replay with DB proxy capture is forced to `concurrency == 1`
+- replay failures are still persisted into `replay-records.jsonl`
+- diff integrates the existing SQL and MongoDB semantic comparers
+- replay-side DB attribution is synchronized with an explicit DB-hook flush barrier before each replay window is finalized
+
+Deferred follow-up items remain:
+
+- config-driven replay DB proxy settings
+- broader replay-time DB proxy ergonomics beyond the existing CLI flag
+
 ## Scope
 
 In scope:
 
-- replay-time DB proxy startup from CLI flags and config
+- replay-time DB proxy startup from CLI flags
 - replay-time DB side-effect collection and request-level attribution
 - diff-engine integration with SQL and MongoDB side-effect comparers
-- config validation and CLI behavior for replay DB proxies
+- CLI validation and behavior for replay DB proxies
 - focused tests for replay, diff, and config behavior
 
 Out of scope:
@@ -22,7 +37,7 @@ Out of scope:
 
 ## Approach
 
-- Add replay DB proxy configuration using the existing `DBProxyConfig` shape so replay can start the same DB hooks already used during record.
+- Reuse the existing `DBProxyConfig` shape from CLI parsing so replay can start the same DB hooks already used during record.
 - Treat replay-time DB capture as a single-request attribution problem: a side effect belongs to the replayed request whose execution window contains the effect timestamp.
 - Enforce serial replay when replay DB proxies are enabled. If DB proxies are configured and effective concurrency is greater than `1`, fail fast with a clear error instead of attempting ambiguous attribution.
 - Extend the diff engine to compare side effects by type:
@@ -33,11 +48,8 @@ Out of scope:
 
 ## Tasks
 
-- Extend replay configuration:
-  - add `Replay.DBProxies []DBProxyConfig`
-  - validate `replay.dbProxies[*]` with the same type/listen/target rules currently used for `capture.dbProxies`
 - Update `cmd/replay.go`:
-  - resolve replay DB proxies with precedence `flag > config > default empty`
+  - resolve replay DB proxies from CLI flags
   - reject `concurrency > 1` when replay DB proxies are enabled
   - start and stop replay DB hooks around engine execution
 - Extend the replay engine and worker flow:
@@ -49,7 +61,7 @@ Out of scope:
   - compare MongoDB side effects using the existing Mongo comparer
   - keep a total count difference only for unmatched residual cases
 - Add tests:
-  - replay config/flag precedence for DB proxies
+  - replay CLI flag handling for DB proxies
   - replay command rejection when DB proxies are enabled with concurrent replay
   - replay engine attribution of side effects into replay records
   - diff engine integration tests for matching SQL, differing SQL, matching Mongo, and differing Mongo operations
@@ -61,8 +73,8 @@ Out of scope:
 
 ## Verification
 
-- `go test ./cmd ./internal/replay ./internal/diff ./internal/config`
+- `go test ./cmd ./internal/replay ./internal/diff`
 - Manual checks:
   - replay with `--db-proxy mysql://...` stores DB side effects in `replay-records.jsonl`
-  - replay with configured DB proxies and `-c 2` returns a clear validation error
+  - replay with `--db-proxy ... -c 2` returns a clear validation error
   - diff reports SQL and MongoDB semantic differences instead of only a count mismatch

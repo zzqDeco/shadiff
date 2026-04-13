@@ -95,3 +95,135 @@ func TestEngineRun_MissingReplayRecordIsReported(t *testing.T) {
 		t.Fatalf("unexpected differences: %+v", results[0].Differences)
 	}
 }
+
+func TestEngineRun_ReplayFailureIsReported(t *testing.T) {
+	store, session := newDiffStore(t)
+	if err := store.AppendRecord(session.ID, &model.Record{
+		ID:        "orig-1",
+		SessionID: session.ID,
+		Sequence:  1,
+		Request:   model.HTTPRequest{Method: "GET", Path: "/items"},
+		Response:  model.HTTPResponse{StatusCode: 200, Body: []byte(`{"ok":true}`)},
+	}); err != nil {
+		t.Fatalf("AppendRecord() error: %v", err)
+	}
+	if err := store.AppendReplayRecord(session.ID, &model.Record{
+		ID:        "replay-1",
+		SessionID: session.ID,
+		Sequence:  1,
+		Request:   model.HTTPRequest{Method: "GET", Path: "/items"},
+		Error:     "dial tcp 127.0.0.1:1: connect: connection refused",
+	}); err != nil {
+		t.Fatalf("AppendReplayRecord() error: %v", err)
+	}
+
+	engine := NewEngine(store, EngineConfig{SessionID: session.ID})
+	results, err := engine.Run()
+	if err != nil {
+		t.Fatalf("Run() error: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("len(results) = %d, want 1", len(results))
+	}
+	if len(results[0].Differences) != 1 || !strings.Contains(results[0].Differences[0].Message, "replay failed") {
+		t.Fatalf("unexpected differences: %+v", results[0].Differences)
+	}
+}
+
+func TestEngineRun_UsesSQLSideEffectComparer(t *testing.T) {
+	store, session := newDiffStore(t)
+	if err := store.AppendRecord(session.ID, &model.Record{
+		ID:        "orig-1",
+		SessionID: session.ID,
+		Sequence:  1,
+		Request:   model.HTTPRequest{Method: "GET", Path: "/items"},
+		Response:  model.HTTPResponse{StatusCode: 200, Body: []byte(`{"ok":true}`)},
+		SideEffects: []model.SideEffect{{
+			Type:   model.SideEffectDB,
+			DBType: "mysql",
+			Query:  "SELECT 1",
+		}},
+	}); err != nil {
+		t.Fatalf("AppendRecord() error: %v", err)
+	}
+	if err := store.AppendReplayRecord(session.ID, &model.Record{
+		ID:        "replay-1",
+		SessionID: session.ID,
+		Sequence:  1,
+		Request:   model.HTTPRequest{Method: "GET", Path: "/items"},
+		Response:  model.HTTPResponse{StatusCode: 200, Body: []byte(`{"ok":true}`)},
+		SideEffects: []model.SideEffect{{
+			Type:   model.SideEffectDB,
+			DBType: "mysql",
+			Query:  "SELECT 2",
+		}},
+	}); err != nil {
+		t.Fatalf("AppendReplayRecord() error: %v", err)
+	}
+
+	engine := NewEngine(store, EngineConfig{SessionID: session.ID})
+	results, err := engine.Run()
+	if err != nil {
+		t.Fatalf("Run() error: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("len(results) = %d, want 1", len(results))
+	}
+	if results[0].Match {
+		t.Fatal("expected SQL side effect diff to break match")
+	}
+	if len(results[0].Differences) == 0 || results[0].Differences[0].Kind != model.DiffDBQuery {
+		t.Fatalf("unexpected differences: %+v", results[0].Differences)
+	}
+}
+
+func TestEngineRun_UsesMongoSideEffectComparer(t *testing.T) {
+	store, session := newDiffStore(t)
+	if err := store.AppendRecord(session.ID, &model.Record{
+		ID:        "orig-1",
+		SessionID: session.ID,
+		Sequence:  1,
+		Request:   model.HTTPRequest{Method: "GET", Path: "/items"},
+		Response:  model.HTTPResponse{StatusCode: 200, Body: []byte(`{"ok":true}`)},
+		SideEffects: []model.SideEffect{{
+			Type:       model.SideEffectDB,
+			DBType:     "mongo",
+			Database:   "app",
+			Collection: "users",
+			Operation:  "find",
+		}},
+	}); err != nil {
+		t.Fatalf("AppendRecord() error: %v", err)
+	}
+	if err := store.AppendReplayRecord(session.ID, &model.Record{
+		ID:        "replay-1",
+		SessionID: session.ID,
+		Sequence:  1,
+		Request:   model.HTTPRequest{Method: "GET", Path: "/items"},
+		Response:  model.HTTPResponse{StatusCode: 200, Body: []byte(`{"ok":true}`)},
+		SideEffects: []model.SideEffect{{
+			Type:       model.SideEffectDB,
+			DBType:     "mongo",
+			Database:   "app",
+			Collection: "users",
+			Operation:  "update",
+		}},
+	}); err != nil {
+		t.Fatalf("AppendReplayRecord() error: %v", err)
+	}
+
+	engine := NewEngine(store, EngineConfig{SessionID: session.ID})
+	results, err := engine.Run()
+	if err != nil {
+		t.Fatalf("Run() error: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("len(results) = %d, want 1", len(results))
+	}
+	if results[0].Match {
+		t.Fatal("expected Mongo side effect diff to break match")
+	}
+	if len(results[0].Differences) == 0 || results[0].Differences[0].Kind != model.DiffMongoOp {
+		t.Fatalf("unexpected differences: %+v", results[0].Differences)
+	}
+}

@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"strings"
 
-	"shadiff/internal/capture"
 	"shadiff/internal/capture/dbhook"
 	"shadiff/internal/config"
+	"shadiff/internal/model"
 )
 
 var newDBHook = dbhook.NewHook
@@ -15,6 +15,22 @@ var newDBHook = dbhook.NewHook
 func resolveRecordDBProxies(flagChanged bool, flagValues []string, cfg *config.AppConfig) ([]config.DBProxyConfig, error) {
 	if !flagChanged {
 		return append([]config.DBProxyConfig(nil), cfg.Capture.DBProxies...), nil
+	}
+
+	proxies := make([]config.DBProxyConfig, 0, len(flagValues))
+	for _, spec := range flagValues {
+		proxy, err := parseDBProxySpec(spec)
+		if err != nil {
+			return nil, err
+		}
+		proxies = append(proxies, proxy)
+	}
+	return proxies, nil
+}
+
+func resolveReplayDBProxies(flagChanged bool, flagValues []string) ([]config.DBProxyConfig, error) {
+	if !flagChanged {
+		return nil, nil
 	}
 
 	proxies := make([]config.DBProxyConfig, 0, len(flagValues))
@@ -44,7 +60,7 @@ func parseDBProxySpec(spec string) (config.DBProxyConfig, error) {
 	}, nil
 }
 
-func startDBHooks(ctx context.Context, recorder *capture.Recorder, proxies []config.DBProxyConfig) ([]dbhook.DBHook, error) {
+func startDBHooks(ctx context.Context, sink chan<- model.SideEffect, proxies []config.DBProxyConfig) (*dbhook.Group, error) {
 	hooks := make([]dbhook.DBHook, 0, len(proxies))
 	for _, proxy := range proxies {
 		hook, err := newDBHook(dbhook.Config{
@@ -53,27 +69,28 @@ func startDBHooks(ctx context.Context, recorder *capture.Recorder, proxies []con
 			TargetAddr: proxy.TargetAddr,
 		})
 		if err != nil {
-			stopDBHooks(hooks)
+			stopHookSlice(hooks)
 			return nil, err
 		}
 		if err := hook.Start(ctx); err != nil {
-			stopDBHooks(hooks)
+			stopHookSlice(hooks)
 			return nil, err
 		}
-
-		go func(h dbhook.DBHook) {
-			for effect := range h.SideEffects() {
-				recorder.SideEffectChan() <- effect
-			}
-		}(hook)
 
 		hooks = append(hooks, hook)
 	}
 
-	return hooks, nil
+	return dbhook.NewGroup(ctx, hooks, sink), nil
 }
 
-func stopDBHooks(hooks []dbhook.DBHook) {
+func stopDBHooks(hooks interface{ Stop() error }) {
+	if hooks == nil {
+		return
+	}
+	_ = hooks.Stop()
+}
+
+func stopHookSlice(hooks []dbhook.DBHook) {
 	for _, hook := range hooks {
 		_ = hook.Stop()
 	}

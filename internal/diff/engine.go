@@ -136,6 +136,22 @@ func (e *Engine) Run() ([]model.DiffResult, error) {
 func (e *Engine) compareRecords(original, replay model.Record) model.DiffResult {
 	var diffs []model.Difference
 
+	if replay.Error != "" {
+		diffs = []model.Difference{{
+			Kind:     model.DiffBody,
+			Path:     "",
+			Message:  fmt.Sprintf("replay failed: %s", replay.Error),
+			Severity: model.SeverityError,
+		}}
+		return model.DiffResult{
+			RecordID:    original.ID,
+			Sequence:    original.Sequence,
+			Request:     original.Request,
+			Match:       false,
+			Differences: diffs,
+		}
+	}
+
 	// 1. Compare status codes
 	if original.Response.StatusCode != replay.Response.StatusCode {
 		diffs = append(diffs, model.Difference{
@@ -157,14 +173,18 @@ func (e *Engine) compareRecords(original, replay model.Record) model.DiffResult 
 		diffs = append(diffs, bodyDiffs...)
 	}
 
-	// 4. Compare side effects (DB operation count)
-	if len(original.SideEffects) != len(replay.SideEffects) {
+	// 4. Compare DB and Mongo side effects semantically.
+	diffs = append(diffs, CompareDBSideEffects(original.SideEffects, replay.SideEffects)...)
+	diffs = append(diffs, CompareMongoSideEffects(original.SideEffects, replay.SideEffects)...)
+
+	// 5. Compare residual non-DB side effect counts.
+	if otherOriginal, otherReplay := countResidualSideEffects(original.SideEffects), countResidualSideEffects(replay.SideEffects); otherOriginal != otherReplay {
 		diffs = append(diffs, model.Difference{
 			Kind:     model.DiffDBQueryCount,
 			Path:     "sideEffects",
-			Expected: len(original.SideEffects),
-			Actual:   len(replay.SideEffects),
-			Message:  fmt.Sprintf("side effect count differs: %d vs %d", len(original.SideEffects), len(replay.SideEffects)),
+			Expected: otherOriginal,
+			Actual:   otherReplay,
+			Message:  fmt.Sprintf("residual side effect count differs: %d vs %d", otherOriginal, otherReplay),
 			Severity: model.SeverityError,
 		})
 	}
@@ -189,6 +209,23 @@ func (e *Engine) compareRecords(original, replay model.Record) model.DiffResult 
 		Match:       match,
 		Differences: diffs,
 	}
+}
+
+func countResidualSideEffects(effects []model.SideEffect) int {
+	count := 0
+	for _, effect := range effects {
+		if effect.Type != model.SideEffectDB {
+			count++
+			continue
+		}
+		switch effect.DBType {
+		case "mysql", "postgres", "mongo":
+			continue
+		default:
+			count++
+		}
+	}
+	return count
 }
 
 func (e *Engine) limitDiffs(diffs []model.Difference, match bool) []model.Difference {
