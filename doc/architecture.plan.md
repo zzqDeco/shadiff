@@ -53,7 +53,8 @@ Stages are decoupled -- they can be run independently, at different times, even 
 
 1. Client sends HTTP request to Shadiff's listening address (default `:18080`).
 2. `capture.Proxy` (wrapping `httputil.ReverseProxy`) intercepts the request:
-   - Reads and buffers the request body.
+   - Checks excluded paths before starting capture work.
+   - Wraps included request bodies with a streaming tap that records only the configured prefix while forwarding the full body to the target service.
    - Builds a `model.HTTPRequest` struct.
    - Forwards the request to the target service via the reverse proxy.
    - Wraps the `ResponseWriter` with a `responseRecorder` to capture status code, headers, and body.
@@ -62,8 +63,8 @@ Stages are decoupled -- they can be run independently, at different times, even 
    - A monotonically increasing sequence number (atomic counter)
    - Duration in milliseconds
    - An 8-character UUID as record ID
-4. The record is passed to `capture.Recorder.Record()`.
-5. The Recorder attaches any pending side effects (collected from DB hooks), then calls `FileStore.AppendRecord()`.
+4. The proxy closes the request scope in `capture.Recorder` and passes the completed record for persistence.
+5. The Recorder flushes side effects collected from DB hooks, attaches those whose timestamps fall within the request scope, and then calls `FileStore.AppendRecord()`.
 6. `FileStore` serializes the record as a single JSON line and appends it to `records.jsonl` with file-level mutex protection.
 
 ### 2.2 Side-Effect Capture (DB Hooks)
@@ -84,8 +85,8 @@ Stages are decoupled -- they can be run independently, at different times, even 
                               v
                        +------+------+
                        |  Recorder   |
-                       | (pending    |
-                       |  effects)   |
+                       | (request    |
+                       |  scopes)    |
                        +-------------+
 ```
 
@@ -96,8 +97,8 @@ DB hooks operate as TCP proxies that sit between the application and the real da
 3. Forward all traffic bidirectionally (`io.Copy` for server-to-client).
 4. Sniff client-to-server traffic to extract query information.
 5. Emit `model.SideEffect` structs on a buffered channel.
-6. The `Recorder`'s background goroutine drains this channel into a `pendingEffects` slice.
-7. When the next HTTP record is saved, pending effects are attached to it.
+6. The `Recorder`'s background goroutine drains this channel and attributes each effect to the best matching request scope by timestamp.
+7. When the HTTP record is finalized, only the effects attributed to that request scope are attached.
 
 ### 2.3 Replay Phase
 
@@ -136,13 +137,15 @@ DB hooks operate as TCP proxies that sit between the application and the real da
 2. Records are dispatched to the `WorkerPool`:
    - Sequential mode (concurrency=1): records are replayed one by one with optional delay.
    - Concurrent mode (concurrency>1): records are distributed to N worker goroutines via a buffered job channel.
+   - If replay DB proxy capture is enabled, replay stays in sequential mode so side effects can be attributed by request window.
 3. For each record, `replay.Transform()` converts `model.HTTPRequest` into a Go `*http.Request`:
    - Rewrites the base URL to the new target.
    - Copies original headers, applies overrides, removes proxy headers (`X-Forwarded-*`).
 4. The worker sends the request via `http.Client` and captures the response.
-5. A new `model.Record` is built for the replay result (preserving the original sequence number for pairing).
-6. Results are saved to `replay-records.jsonl`.
-7. Session status is updated to `replayed`.
+5. When replay DB capture is enabled, side effects emitted by replay DB hooks are collected and attached to the replay record whose start/end window contains the effect timestamp.
+6. A new `model.Record` is built for the replay result (preserving the original sequence number for pairing). Failed replays are still persisted with `Error` populated.
+7. Results are saved to `replay-records.jsonl`.
+8. Session status is updated to `replayed`.
 
 ### 2.4 Diff Phase
 
@@ -163,9 +166,9 @@ DB hooks operate as TCP proxies that sit between the application and the real da
            +-------+-------+
                    |
      +-------------+-------------+
-     |             |             |
-  status code   headers       body (JSON)
-  comparison   comparison    recursive diff
+     |             |             |             |
+  status code   headers       body (JSON)   DB side effects
+  comparison   comparison    recursive diff semantic compare
                    |
               +----v-----+
               | Rule Set |  (ignore/custom matchers)
@@ -188,7 +191,7 @@ DB hooks operate as TCP proxies that sit between the application and the real da
      - Array diff: ordered (index-by-index) or unordered (best-match pairing).
      - Scalar diff: type-aware with numeric type coercion.
      - Non-JSON bodies fall back to byte-level comparison.
-   - **Side effects**: count comparison for DB operations.
+   - **Side effects**: semantic SQL and MongoDB comparison, plus residual non-DB side-effect count fallback.
 5. The `RuleSet` is applied to all differences:
    - `ignore` rules: mark matching paths as ignored (e.g., timestamp fields).
    - `custom` rules: invoke `Matcher` implementations (timestamp, UUID, numeric tolerance).

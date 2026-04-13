@@ -265,7 +265,7 @@ func runRecordLoop(dataDir string, dbProxies []config.DBProxyConfig) error {
 		defer cancel()
 	}
 
-	hooks, err := startDBHooks(ctx, recorder, dbProxies)
+	hooks, err := startDBHooks(ctx, recorder.SideEffectChan(), dbProxies)
 	if err != nil {
 		return fmt.Errorf("failed to start db hooks: %w", err)
 	}

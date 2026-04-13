@@ -5,11 +5,9 @@ import (
 	"errors"
 	"testing"
 
-	"shadiff/internal/capture"
 	"shadiff/internal/capture/dbhook"
 	"shadiff/internal/config"
 	"shadiff/internal/model"
-	"shadiff/internal/storage"
 )
 
 type fakeDBHook struct {
@@ -69,18 +67,25 @@ func TestResolveRecordDBProxies_UsesConfigWhenFlagUnchanged(t *testing.T) {
 	}
 }
 
-func TestStartDBHooks_StopsStartedHooksOnError(t *testing.T) {
-	store, err := storage.NewFileStore(t.TempDir())
+func TestResolveReplayDBProxies_UsesFlagsOnly(t *testing.T) {
+	proxies, err := resolveReplayDBProxies(true, []string{"mysql://:13307->127.0.0.1:3306"})
 	if err != nil {
-		t.Fatalf("NewFileStore() error: %v", err)
+		t.Fatalf("resolveReplayDBProxies() error: %v", err)
 	}
-	session := &model.Session{Name: "dbhooks", Status: model.SessionRecording}
-	if err := store.Create(session); err != nil {
-		t.Fatalf("Create() error: %v", err)
+	if len(proxies) != 1 || proxies[0].Type != "mysql" {
+		t.Fatalf("unexpected proxies: %+v", proxies)
 	}
-	recorder := capture.NewRecorder(session.ID, store)
-	defer recorder.Stop()
 
+	proxies, err = resolveReplayDBProxies(false, []string{"mysql://:13307->127.0.0.1:3306"})
+	if err != nil {
+		t.Fatalf("resolveReplayDBProxies() unchanged error: %v", err)
+	}
+	if len(proxies) != 0 {
+		t.Fatalf("expected no replay proxies when flag unchanged, got %+v", proxies)
+	}
+}
+
+func TestStartDBHooks_StopsStartedHooksOnError(t *testing.T) {
 	first := &fakeDBHook{sideEffects: make(chan model.SideEffect)}
 	expectedErr := errors.New("boom")
 
@@ -96,7 +101,9 @@ func TestStartDBHooks_StopsStartedHooksOnError(t *testing.T) {
 		return nil, expectedErr
 	}
 
-	_, err = startDBHooks(context.Background(), recorder, []config.DBProxyConfig{
+	sink := make(chan model.SideEffect, 1)
+
+	_, err := startDBHooks(context.Background(), sink, []config.DBProxyConfig{
 		{Type: "mysql", ListenAddr: ":1", TargetAddr: ":2"},
 		{Type: "postgres", ListenAddr: ":3", TargetAddr: ":4"},
 	})

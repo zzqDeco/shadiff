@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"shadiff/internal/model"
 	"shadiff/internal/storage"
@@ -77,5 +78,102 @@ func TestEngineRun_EmptySessionReturnsError(t *testing.T) {
 
 	if _, err := engine.Run(); err == nil {
 		t.Fatal("expected empty session to return an error")
+	}
+}
+
+func TestEngineRun_PersistsFailedReplayRecords(t *testing.T) {
+	store, session := newReplayStore(t)
+	original := &model.Record{
+		ID:        "orig-1",
+		SessionID: session.ID,
+		Sequence:  1,
+		Request: model.HTTPRequest{
+			Method: "GET",
+			Path:   "/hello",
+		},
+	}
+	if err := store.AppendRecord(session.ID, original); err != nil {
+		t.Fatalf("AppendRecord() error: %v", err)
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	targetURL := server.URL
+	server.Close()
+
+	engine := NewEngine(store, EngineConfig{
+		SessionID: session.ID,
+		TargetURL: targetURL,
+		Timeout:   100 * time.Millisecond,
+	})
+	results, err := engine.Run()
+	if err != nil {
+		t.Fatalf("Run() error: %v", err)
+	}
+	if len(results) != 1 || results[0].Error == nil {
+		t.Fatalf("unexpected replay results: %+v", results)
+	}
+
+	replays, err := store.ListReplayRecords(session.ID)
+	if err != nil {
+		t.Fatalf("ListReplayRecords() error: %v", err)
+	}
+	if len(replays) != 1 {
+		t.Fatalf("len(replays) = %d, want 1", len(replays))
+	}
+	if replays[0].Error == "" {
+		t.Fatal("expected persisted replay record to include error")
+	}
+}
+
+func TestEngineRun_AttachesReplayDBSideEffects(t *testing.T) {
+	store, session := newReplayStore(t)
+	original := &model.Record{
+		ID:        "orig-1",
+		SessionID: session.ID,
+		Sequence:  1,
+		Request: model.HTTPRequest{
+			Method: "GET",
+			Path:   "/hello",
+		},
+	}
+	if err := store.AppendRecord(session.ID, original); err != nil {
+		t.Fatalf("AppendRecord() error: %v", err)
+	}
+
+	sideEffects := make(chan model.SideEffect, 4)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sideEffects <- model.SideEffect{
+			Type:      model.SideEffectDB,
+			DBType:    "mysql",
+			Query:     "SELECT 1",
+			Timestamp: time.Now().UnixMilli(),
+		}
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte("ok"))
+	}))
+	defer server.Close()
+
+	engine := NewEngine(store, EngineConfig{
+		SessionID:    session.ID,
+		TargetURL:    server.URL,
+		SideEffectCh: sideEffects,
+	})
+	results, err := engine.Run()
+	if err != nil {
+		t.Fatalf("Run() error: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("len(results) = %d, want 1", len(results))
+	}
+	if len(results[0].Replayed.SideEffects) != 1 {
+		t.Fatalf("replayed sideEffects len = %d, want 1", len(results[0].Replayed.SideEffects))
+	}
+
+	replays, err := store.ListReplayRecords(session.ID)
+	if err != nil {
+		t.Fatalf("ListReplayRecords() error: %v", err)
+	}
+	if len(replays) != 1 || len(replays[0].SideEffects) != 1 {
+		t.Fatalf("persisted replay sideEffects = %+v", replays)
 	}
 }
