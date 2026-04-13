@@ -164,7 +164,8 @@ Client  --->  Proxy.ServeHTTP()  --->  ReverseProxy  --->  Target Service
               Recorder.Record()  -->  FileStore.AppendRecord()
 ```
 
-- The request body is read fully into memory (`io.ReadAll`), then restored as a new `io.NopCloser(bytes.NewReader(...))` so the reverse proxy can still forward it.
+- Excluded paths are checked before request capture begins.
+- Included request bodies are wrapped in a streaming tap `io.ReadCloser` that forwards the full body upstream, stores only the configured capture prefix, and keeps `BodyLen` equal to the full observed body size.
 - `responseRecorder.Write()` tees data: it writes to both its internal `bytes.Buffer` (for capture) and the underlying `ResponseWriter` (for the client).
 - `responseRecorder.WriteHeader()` uses a `wroteHeader` guard to prevent double writes.
 - Sequence numbers are assigned atomically via `atomic.Int64.Add(1)`.
