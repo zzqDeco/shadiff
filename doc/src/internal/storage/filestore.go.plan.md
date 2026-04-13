@@ -9,7 +9,7 @@
 
 ## 2. Core Responsibility
 - Provides a file-system-based implementation of `SessionStore`, `RecordStore`, and `DiffStore` interfaces.
-- Manages on-disk directory layout: `{baseDir}/sessions/{id}/session.json`, `records.jsonl`, `replay-records.jsonl`, `diff-results.json`.
+- Manages on-disk directory layout: `{baseDir}/sessions/{id}/session.json`, `records.jsonl`, `replay-records.jsonl`, `diff-results.json`, plus request-body artifacts under `artifacts/request-bodies/`.
 - Changes to this file should be kept in sync with project-level documentation.
 
 ## 3. Inputs & Outputs
@@ -28,6 +28,8 @@
   - `Delete(id)` -- removes the entire session directory with `os.RemoveAll`.
   - `AppendRecord(sessionID, record)` -- appends a JSON line to `records.jsonl`.
   - `AppendReplayRecord(sessionID, record)` -- appends a JSON line to `replay-records.jsonl`.
+  - `SaveRequestBodyArtifact(sessionID, recordID, src)` -- writes the full request body to `artifacts/request-bodies/<recordID>.bin` and returns a session-relative path for `HTTPRequest.BodyRef`.
+  - `OpenRequestBodyArtifact(sessionID, ref)` -- opens a previously stored request body artifact by its session-relative path.
   - `ListRecords(sessionID)` -- reads and parses `records.jsonl`.
   - `ListReplayRecords(sessionID)` -- reads and parses `replay-records.jsonl`.
   - `GetRecord(sessionID, recordID)` -- linear scan of records to find by ID.
@@ -36,7 +38,8 @@
   - `LoadResults(sessionID)` -- reads and deserializes `diff-results.json`.
 - Key behaviors:
   - All public methods acquire `sync.RWMutex` (read-lock for reads, write-lock for writes) for goroutine safety.
-  - JSONL scanner buffer is set to 10 MB max per line to handle large response bodies.
+  - JSONL scanner buffer is set to 10 MB max per line to handle large response bodies while keeping full request bodies out of JSONL.
+  - Request body artifacts are path-sanitized before opening so callers cannot escape the session directory with `..`.
   - Corrupted session directories and JSONL lines are silently skipped (no error propagation for individual corrupt entries).
   - `Tags` and `Metadata` fields are initialized to empty non-nil values on load and create to prevent JSON `null` serialization.
 
@@ -50,6 +53,7 @@
 - Changes to the directory layout or file naming affect all components that read session data (replay engine, diff engine, CLI/HTTP handlers).
 - The mutex strategy affects concurrency guarantees; switching to per-session locks would require refactoring.
 - `AppendReplayRecord` is called by the replay engine; `ListReplayRecords` is called by the diff engine.
+- Request-body artifact helpers are used by the capture proxy (write path) and replay worker pool (read path).
 
 ## 7. Maintenance Notes
 - `GetRecord` and `CountRecords` load all records into memory; consider adding an indexed lookup if record counts grow large.

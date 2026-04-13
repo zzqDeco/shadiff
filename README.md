@@ -270,7 +270,8 @@ Example:
 
 Notes:
 
-- `capture.maxBodySize` truncates recorded request/response bodies but keeps the original `bodyLen`.
+- `capture.maxBodySize` truncates the inline recorded request/response body preview but keeps the original `bodyLen`.
+- When a request body is truncated inline, Shadiff stores the full request body under the session directory and replay uses that artifact automatically.
 - `capture.excludePaths` skips recording matching HTTP paths while still proxying them.
 - `capture.dbProxies` uses the same format as `--db-proxy`.
 - `diff.rulesFile` accepts JSON, YAML, or YML rule files.
@@ -290,6 +291,8 @@ All persistent data is stored under `~/.shadiff/`:
         ├── records.jsonl              # Recorded behavior (JSONL streaming)
         ├── replay-records.jsonl       # Replay results
         ├── diff-results.json          # Diff results
+        ├── artifacts/
+        │   └── request-bodies/        # Full request-body artifacts used for faithful replay
         ├── pidfile                    # Daemon PID file (daemon mode only)
         └── daemon.log                 # Daemon stdout/stderr log (daemon mode only)
 ```

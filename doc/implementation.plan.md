@@ -62,7 +62,7 @@ This document maps every package, source file, and key implementation pattern in
 | File | Description |
 |------|-------------|
 | `proxy.go` | HTTP reverse proxy (`httputil.ReverseProxy` wrapper); captures request/response pairs with `responseRecorder`; assigns sequence numbers via `atomic.Int64` |
-| `recorder.go` | Unified recorder; manages request scopes, attributes side effects from the channel by timestamp, persists via `FileStore.AppendRecord()`; runs background goroutine to collect side effects |
+| `recorder.go` | Unified recorder; manages request scopes, attributes side effects from the channel by timestamp, persists via `FileStore.AppendRecord()`, and exposes request-body artifact persistence for the proxy |
 | `recorder_test.go` | Tests for the Recorder |
 
 ### `internal/capture/dbhook/` -- Database Protocol Proxies
@@ -123,8 +123,8 @@ This document maps every package, source file, and key implementation pattern in
 | File | Description |
 |------|-------------|
 | `engine.go` | Replay engine; reads recorded records from storage, executes replay, optionally attributes replay DB side effects by request window, saves replay records to `replay-records.jsonl` |
-| `worker.go` | `WorkerPool` struct; concurrent replay with configurable worker count and inter-request delay; `replayOne()` sends a single HTTP request and captures the response as a new `Record` |
-| `transform.go` | `TransformConfig` and `Transform()` function; rewrites recorded requests for the replay target (URL, headers, proxy header removal) |
+| `worker.go` | `WorkerPool` struct; concurrent replay with configurable worker count and inter-request delay; `replayOne()` sends a single HTTP request, preferring stored full-body artifacts when present, and captures the response as a new `Record` |
+| `transform.go` | `TransformConfig`, `Transform()`, and `TransformWithBody()`; rewrites recorded requests for the replay target (URL, headers, proxy header removal) and supports artifact-backed request bodies |
 | `transform_test.go` | Tests for request transformation |
 
 ### `internal/reporter/` -- Report Generation
@@ -168,7 +168,7 @@ Client  --->  Proxy.ServeHTTP()  --->  ReverseProxy  --->  Target Service
 ```
 
 - Excluded paths are checked before request capture begins.
-- Included request bodies are wrapped in a streaming tap `io.ReadCloser` that forwards the full body upstream, stores only the configured capture prefix, and keeps `BodyLen` equal to the full observed body size.
+- Included request bodies are fully snapshotted before proxying, keep only the configured inline preview in `Request.Body`, and store replayable full-body artifacts when the preview is truncated.
 - Included requests open a recorder scope before proxying and close it after response capture so side effects can be attached within the request time window.
 - `responseRecorder.Write()` tees data: it writes to both its internal `bytes.Buffer` (for capture) and the underlying `ResponseWriter` (for the client).
 - `responseRecorder.WriteHeader()` uses a `wroteHeader` guard to prevent double writes.
