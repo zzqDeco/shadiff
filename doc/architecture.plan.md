@@ -53,7 +53,8 @@ Stages are decoupled -- they can be run independently, at different times, even 
 
 1. Client sends HTTP request to Shadiff's listening address (default `:18080`).
 2. `capture.Proxy` (wrapping `httputil.ReverseProxy`) intercepts the request:
-   - Reads and buffers the request body.
+   - Checks excluded paths before starting capture work.
+   - Wraps included request bodies with a streaming tap that records only the configured prefix while forwarding the full body to the target service.
    - Builds a `model.HTTPRequest` struct.
    - Forwards the request to the target service via the reverse proxy.
    - Wraps the `ResponseWriter` with a `responseRecorder` to capture status code, headers, and body.

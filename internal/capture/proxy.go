@@ -57,13 +57,6 @@ func NewProxy(targetURL string, recorder *Recorder, opts ProxyOptions) (*Proxy, 
 func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	startTime := time.Now()
 
-	// Read request body
-	var reqBody []byte
-	if r.Body != nil {
-		reqBody, _ = io.ReadAll(r.Body)
-		r.Body = io.NopCloser(bytes.NewReader(reqBody))
-	}
-
 	if p.shouldSkip(r.URL.Path) {
 		p.proxy.ServeHTTP(w, r)
 		dropped := p.recorder.DropPendingSideEffects()
@@ -75,16 +68,24 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	seq := int(p.sequence.Add(1))
-	capturedReqBody, reqBodyLen := truncateBody(reqBody, p.maxBodySize)
+
+	var reqBody *requestBodyCapture
+	if r.Body != nil {
+		reqBody = newRequestBodyCapture(r.Body, p.maxBodySize)
+		r.Body = reqBody
+	}
+
+	reqMethod := r.Method
+	reqPath := r.URL.Path
+	reqQuery := r.URL.RawQuery
+	reqHeaders := cloneHeaders(r.Header)
 
 	// Build HTTPRequest
 	httpReq := model.HTTPRequest{
-		Method:  r.Method,
-		Path:    r.URL.Path,
-		Query:   r.URL.RawQuery,
-		Headers: cloneHeaders(r.Header),
-		Body:    capturedReqBody,
-		BodyLen: reqBodyLen,
+		Method:  reqMethod,
+		Path:    reqPath,
+		Query:   reqQuery,
+		Headers: reqHeaders,
 	}
 
 	// Use ResponseRecorder to capture the response
@@ -97,6 +98,10 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	p.proxy.ServeHTTP(rr, r)
 
 	duration := time.Since(startTime).Milliseconds()
+	if reqBody != nil {
+		httpReq.Body = reqBody.Body()
+		httpReq.BodyLen = reqBody.BodyLen()
+	}
 
 	// Build HTTPResponse
 	httpResp := model.HTTPResponse{
@@ -183,17 +188,6 @@ func cloneHeaders(h http.Header) map[string][]string {
 	return result
 }
 
-func truncateBody(body []byte, max int64) ([]byte, int64) {
-	originalLen := int64(len(body))
-	if max == 0 {
-		return nil, originalLen
-	}
-	if max > 0 && originalLen > max {
-		return append([]byte(nil), body[:max]...), originalLen
-	}
-	return append([]byte(nil), body...), originalLen
-}
-
 func (p *Proxy) shouldSkip(path string) bool {
 	for _, prefix := range p.excludePaths {
 		if prefix != "" && strings.HasPrefix(path, prefix) {
@@ -201,4 +195,58 @@ func (p *Proxy) shouldSkip(path string) bool {
 		}
 	}
 	return false
+}
+
+type requestBodyCapture struct {
+	body        io.ReadCloser
+	captured    bytes.Buffer
+	bodyLen     int64
+	maxBodySize int64
+}
+
+func newRequestBodyCapture(body io.ReadCloser, maxBodySize int64) *requestBodyCapture {
+	return &requestBodyCapture{
+		body:        body,
+		maxBodySize: maxBodySize,
+	}
+}
+
+func (c *requestBodyCapture) Read(p []byte) (int, error) {
+	n, err := c.body.Read(p)
+	if n > 0 {
+		c.bodyLen += int64(n)
+		c.capture(p[:n])
+	}
+	return n, err
+}
+
+func (c *requestBodyCapture) Close() error {
+	return c.body.Close()
+}
+
+func (c *requestBodyCapture) Body() []byte {
+	return append([]byte(nil), c.captured.Bytes()...)
+}
+
+func (c *requestBodyCapture) BodyLen() int64 {
+	return c.bodyLen
+}
+
+func (c *requestBodyCapture) capture(chunk []byte) {
+	if c.maxBodySize == 0 {
+		return
+	}
+	if c.maxBodySize < 0 {
+		_, _ = c.captured.Write(chunk)
+		return
+	}
+
+	remaining := c.maxBodySize - int64(c.captured.Len())
+	if remaining <= 0 {
+		return
+	}
+	if remaining > int64(len(chunk)) {
+		remaining = int64(len(chunk))
+	}
+	_, _ = c.captured.Write(chunk[:remaining])
 }
