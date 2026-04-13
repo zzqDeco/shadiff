@@ -60,7 +60,7 @@ func parseDBProxySpec(spec string) (config.DBProxyConfig, error) {
 	}, nil
 }
 
-func startDBHooks(ctx context.Context, sink chan<- model.SideEffect, proxies []config.DBProxyConfig) ([]dbhook.DBHook, error) {
+func startDBHooks(ctx context.Context, sink chan<- model.SideEffect, proxies []config.DBProxyConfig) (*dbhook.Group, error) {
 	hooks := make([]dbhook.DBHook, 0, len(proxies))
 	for _, proxy := range proxies {
 		hook, err := newDBHook(dbhook.Config{
@@ -69,31 +69,28 @@ func startDBHooks(ctx context.Context, sink chan<- model.SideEffect, proxies []c
 			TargetAddr: proxy.TargetAddr,
 		})
 		if err != nil {
-			stopDBHooks(hooks)
+			stopHookSlice(hooks)
 			return nil, err
 		}
 		if err := hook.Start(ctx); err != nil {
-			stopDBHooks(hooks)
+			stopHookSlice(hooks)
 			return nil, err
 		}
-
-		go func(h dbhook.DBHook) {
-			for effect := range h.SideEffects() {
-				select {
-				case sink <- effect:
-				case <-ctx.Done():
-					return
-				}
-			}
-		}(hook)
 
 		hooks = append(hooks, hook)
 	}
 
-	return hooks, nil
+	return dbhook.NewGroup(ctx, hooks, sink), nil
 }
 
-func stopDBHooks(hooks []dbhook.DBHook) {
+func stopDBHooks(hooks interface{ Stop() error }) {
+	if hooks == nil {
+		return
+	}
+	_ = hooks.Stop()
+}
+
+func stopHookSlice(hooks []dbhook.DBHook) {
 	for _, hook := range hooks {
 		_ = hook.Stop()
 	}

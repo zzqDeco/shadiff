@@ -23,12 +23,13 @@
 
 ## 4. Key Implementation Details
 - Structs/interfaces:
-  - `PostgresHook` -- Implements `DBHook`. Holds listen/target addresses, a `net.Listener`, a buffered side-effects channel (capacity 1000), a `done` channel for shutdown, and a `sync.WaitGroup` for goroutine lifecycle management.
+  - `PostgresHook` -- Implements `DBHook`. Holds listen/target addresses, a `net.Listener`, a buffered side-effects channel (capacity 1000), a `done` channel for shutdown, a `sync.WaitGroup`, and a mutex-protected set of active sniffed connections for flush barriers.
 - Exported functions/methods:
   - `NewPostgresHook(listenAddr, targetAddr string) *PostgresHook` -- Constructor.
   - `(*PostgresHook).Type() string` -- Returns `"postgres"`.
   - `(*PostgresHook).SideEffects() <-chan model.SideEffect` -- Returns the read-only side-effects channel.
   - `(*PostgresHook).Start(ctx context.Context) error` -- Opens a TCP listener and spawns an accept loop goroutine.
+  - `(*PostgresHook).Flush(ctx context.Context) error` -- Injects a barrier into each active sniff loop and waits for already-observed frontend messages to be parsed.
   - `(*PostgresHook).Stop() error` -- Signals shutdown, closes the listener, waits for all goroutines, and closes the side-effects channel.
 - Unexported helpers:
   - `extractNullTermString(data []byte) string` -- Extracts a C-style null-terminated string from a byte slice.
@@ -38,7 +39,9 @@
   - `pgMsgParse` ('P') -- Extended Query Parse message type.
 - Key behaviors:
   - Connection handling follows the same pattern as the MySQL hook: each client gets a dedicated goroutine pair for bidirectional proxying.
+  - Active sniffed connections are tracked so `Flush(ctx)` can coordinate per-connection flush barriers.
   - `sniffClientToServer` includes a `startup` flag to skip the initial PostgreSQL startup message, which has a different format (no message type byte, just 4-byte length + 4-byte protocol version). After the first message of 8+ bytes, the flag is cleared and subsequent messages are parsed as standard frontend messages.
+  - Read deadlines allow the sniff loop to service flush requests promptly; `flushConn(...)` keeps reading until a short idle window expires and preserves the current startup/non-startup phase.
   - `parsePGMessage` iterates through potentially multiple messages in a single read buffer. Each message has a 1-byte type, 4-byte big-endian length (inclusive of the length field itself), and a variable-length payload.
   - For Simple Query ('Q'), the payload is a null-terminated SQL string.
   - For Parse ('P'), the payload contains a null-terminated statement name followed by a null-terminated query string. The parser skips the statement name to extract the query.

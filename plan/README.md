@@ -13,7 +13,8 @@
 | Document | Description | Status |
 |----------|-------------|--------|
 | `plan/capture-stream-request-bodies.plan.md` | Stream request body capture and avoid eager buffering for skipped or large requests | Completed |
-| `plan/request-body-artifacts.plan.md` | Persist full request-body artifacts so replay can reconstruct large or partially-consumed requests faithfully | In Progress |
+| `plan/request-body-artifacts.plan.md` | Persist full request-body artifacts so replay can reconstruct large or partially-consumed requests faithfully | Completed |
+| `plan/dbhook-flush-barriers.plan.md` | Add explicit DB-hook flush barriers so capture/replay attribution does not lose late-delivered side effects | Completed |
 | `plan/replay-db-sideeffects.plan.md` | Close the DB side-effect replay and diff loop for MySQL, PostgreSQL, and MongoDB | In Progress |
 | `plan/request-scoped-sideeffect-attribution.plan.md` | Replace next-record side-effect attachment with request-scoped attribution | Completed |
 | `plan/diff-ci-output.plan.md` | Make `shadiff diff` produce stable machine-readable output and CI-friendly exit codes | In Progress |

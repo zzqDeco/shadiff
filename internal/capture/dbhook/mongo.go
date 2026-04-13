@@ -21,6 +21,8 @@ type MongoHook struct {
 	sideEffects chan model.SideEffect
 	done        chan struct{}
 	wg          sync.WaitGroup
+	connsMu     sync.RWMutex
+	activeConns map[*activeConn]struct{}
 }
 
 // MongoDB Wire Protocol constants
@@ -34,6 +36,7 @@ func NewMongoHook(listenAddr, targetAddr string) *MongoHook {
 		targetAddr:  targetAddr,
 		sideEffects: make(chan model.SideEffect, 1000),
 		done:        make(chan struct{}),
+		activeConns: make(map[*activeConn]struct{}),
 	}
 }
 
@@ -84,6 +87,27 @@ func (h *MongoHook) Start(ctx context.Context) error {
 	return nil
 }
 
+func (h *MongoHook) Flush(ctx context.Context) error {
+	for _, conn := range h.snapshotActiveConns() {
+		ack := make(chan struct{})
+		select {
+		case conn.flushCh <- ack:
+		case <-conn.done:
+			continue
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+
+		select {
+		case <-ack:
+		case <-conn.done:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	return nil
+}
+
 func (h *MongoHook) Stop() error {
 	close(h.done)
 	if h.listener != nil {
@@ -104,6 +128,15 @@ func (h *MongoHook) handleConn(clientConn net.Conn) {
 	}
 	defer serverConn.Close()
 
+	conn := &activeConn{
+		client:  clientConn,
+		server:  serverConn,
+		flushCh: make(chan chan struct{}),
+		done:    make(chan struct{}),
+	}
+	h.registerConn(conn)
+	defer h.unregisterConn(conn)
+
 	var wg sync.WaitGroup
 
 	// Server -> Client (passthrough)
@@ -117,17 +150,30 @@ func (h *MongoHook) handleConn(clientConn net.Conn) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		h.sniffClientToServer(clientConn, serverConn)
+		defer close(conn.done)
+		h.sniffClientToServer(conn)
 	}()
 
 	wg.Wait()
 }
 
-func (h *MongoHook) sniffClientToServer(client, server net.Conn) {
+func (h *MongoHook) sniffClientToServer(conn *activeConn) {
 	for {
+		select {
+		case ack := <-conn.flushCh:
+			h.flushConn(conn)
+			close(ack)
+			continue
+		default:
+		}
+
 		// MongoDB Wire Protocol header: 4-byte message length (little-endian)
 		header := make([]byte, 16)
-		if _, err := io.ReadFull(client, header); err != nil {
+		_ = conn.client.SetReadDeadline(time.Now().Add(hookReadPollInterval))
+		if _, err := io.ReadFull(conn.client, header); err != nil {
+			if ne, ok := err.(net.Error); ok && ne.Timeout() {
+				continue
+			}
 			return
 		}
 
@@ -140,25 +186,66 @@ func (h *MongoHook) sniffClientToServer(client, server net.Conn) {
 		remaining := msgLen - 16
 		if remaining < 0 || remaining > 16*1024*1024 {
 			// Invalid message length, forward header then fall back to passthrough
-			server.Write(header)
-			io.Copy(server, client)
+			conn.server.Write(header)
+			io.Copy(conn.server, conn.client)
 			return
 		}
 
 		body := make([]byte, remaining)
-		if _, err := io.ReadFull(client, body); err != nil {
-			server.Write(header)
+		if _, err := io.ReadFull(conn.client, body); err != nil {
+			conn.server.Write(header)
 			return
 		}
 
 		// Forward the complete message
-		server.Write(header)
-		server.Write(body)
+		conn.server.Write(header)
+		conn.server.Write(body)
 
 		// Try to parse OP_MSG
 		if opCode == opMsgOpCode {
 			h.parseOpMsg(body)
 		}
+	}
+}
+
+func (h *MongoHook) flushConn(conn *activeConn) {
+	idleDeadline := time.Now().Add(hookFlushIdleWindow)
+	for {
+		remaining := time.Until(idleDeadline)
+		if remaining <= 0 {
+			return
+		}
+
+		header := make([]byte, 16)
+		_ = conn.client.SetReadDeadline(time.Now().Add(remaining))
+		if _, err := io.ReadFull(conn.client, header); err != nil {
+			if ne, ok := err.(net.Error); ok && ne.Timeout() {
+				return
+			}
+			return
+		}
+
+		msgLen := int(binary.LittleEndian.Uint32(header[0:4]))
+		opCode := int(binary.LittleEndian.Uint32(header[12:16]))
+		remainingBody := msgLen - 16
+		if remainingBody < 0 || remainingBody > 16*1024*1024 {
+			conn.server.Write(header)
+			io.Copy(conn.server, conn.client)
+			return
+		}
+
+		body := make([]byte, remainingBody)
+		if _, err := io.ReadFull(conn.client, body); err != nil {
+			conn.server.Write(header)
+			return
+		}
+
+		conn.server.Write(header)
+		conn.server.Write(body)
+		if opCode == opMsgOpCode {
+			h.parseOpMsg(body)
+		}
+		idleDeadline = time.Now().Add(hookFlushIdleWindow)
 	}
 }
 
@@ -375,6 +462,29 @@ func simpleBSONToMap(data []byte) map[string]any {
 	}
 
 	return result
+}
+
+func (h *MongoHook) registerConn(conn *activeConn) {
+	h.connsMu.Lock()
+	defer h.connsMu.Unlock()
+	h.activeConns[conn] = struct{}{}
+}
+
+func (h *MongoHook) unregisterConn(conn *activeConn) {
+	h.connsMu.Lock()
+	defer h.connsMu.Unlock()
+	delete(h.activeConns, conn)
+}
+
+func (h *MongoHook) snapshotActiveConns() []*activeConn {
+	h.connsMu.RLock()
+	defer h.connsMu.RUnlock()
+
+	conns := make([]*activeConn, 0, len(h.activeConns))
+	for conn := range h.activeConns {
+		conns = append(conns, conn)
+	}
+	return conns
 }
 
 // MongoCommandToJSON converts a MongoDB command to a readable JSON string (for logging and reporting)

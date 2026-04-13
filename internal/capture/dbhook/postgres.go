@@ -20,6 +20,8 @@ type PostgresHook struct {
 	sideEffects chan model.SideEffect
 	done        chan struct{}
 	wg          sync.WaitGroup
+	connsMu     sync.RWMutex
+	activeConns map[*activeConn]struct{}
 }
 
 // PostgreSQL frontend message types
@@ -34,6 +36,7 @@ func NewPostgresHook(listenAddr, targetAddr string) *PostgresHook {
 		targetAddr:  targetAddr,
 		sideEffects: make(chan model.SideEffect, 1000),
 		done:        make(chan struct{}),
+		activeConns: make(map[*activeConn]struct{}),
 	}
 }
 
@@ -84,6 +87,27 @@ func (h *PostgresHook) Start(ctx context.Context) error {
 	return nil
 }
 
+func (h *PostgresHook) Flush(ctx context.Context) error {
+	for _, conn := range h.snapshotActiveConns() {
+		ack := make(chan struct{})
+		select {
+		case conn.flushCh <- ack:
+		case <-conn.done:
+			continue
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+
+		select {
+		case <-ack:
+		case <-conn.done:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	return nil
+}
+
 func (h *PostgresHook) Stop() error {
 	close(h.done)
 	if h.listener != nil {
@@ -104,6 +128,15 @@ func (h *PostgresHook) handleConn(clientConn net.Conn) {
 	}
 	defer serverConn.Close()
 
+	conn := &activeConn{
+		client:  clientConn,
+		server:  serverConn,
+		flushCh: make(chan chan struct{}),
+		done:    make(chan struct{}),
+	}
+	h.registerConn(conn)
+	defer h.unregisterConn(conn)
+
 	var wg sync.WaitGroup
 
 	// Server -> Client (passthrough)
@@ -117,25 +150,38 @@ func (h *PostgresHook) handleConn(clientConn net.Conn) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		h.sniffClientToServer(clientConn, serverConn)
+		defer close(conn.done)
+		h.sniffClientToServer(conn)
 	}()
 
 	wg.Wait()
 }
 
-func (h *PostgresHook) sniffClientToServer(client, server net.Conn) {
+func (h *PostgresHook) sniffClientToServer(conn *activeConn) {
 	buf := make([]byte, 64*1024)
 	// Flag whether the startup phase has passed (startup messages have no type byte)
 	startup := true
 
 	for {
-		n, err := client.Read(buf)
+		select {
+		case ack := <-conn.flushCh:
+			startup = h.flushConn(conn, buf, startup)
+			close(ack)
+			continue
+		default:
+		}
+
+		_ = conn.client.SetReadDeadline(time.Now().Add(hookReadPollInterval))
+		n, err := conn.client.Read(buf)
 		if err != nil {
+			if ne, ok := err.(net.Error); ok && ne.Timeout() {
+				continue
+			}
 			return
 		}
 
 		// Forward
-		if _, err := server.Write(buf[:n]); err != nil {
+		if _, err := conn.server.Write(buf[:n]); err != nil {
 			return
 		}
 
@@ -150,6 +196,39 @@ func (h *PostgresHook) sniffClientToServer(client, server net.Conn) {
 
 		// Parse PostgreSQL frontend messages
 		h.parsePGMessage(buf[:n])
+	}
+}
+
+func (h *PostgresHook) flushConn(conn *activeConn, buf []byte, startup bool) bool {
+	idleDeadline := time.Now().Add(hookFlushIdleWindow)
+	startupPhase := startup
+	for {
+		remaining := time.Until(idleDeadline)
+		if remaining <= 0 {
+			return startupPhase
+		}
+
+		_ = conn.client.SetReadDeadline(time.Now().Add(remaining))
+		n, err := conn.client.Read(buf)
+		if n > 0 {
+			if _, writeErr := conn.server.Write(buf[:n]); writeErr != nil {
+				return startupPhase
+			}
+			if startupPhase {
+				if n >= 8 {
+					startupPhase = false
+				}
+			} else {
+				h.parsePGMessage(buf[:n])
+			}
+			idleDeadline = time.Now().Add(hookFlushIdleWindow)
+		}
+		if err != nil {
+			if ne, ok := err.(net.Error); ok && ne.Timeout() {
+				return startupPhase
+			}
+			return startupPhase
+		}
 	}
 }
 
@@ -224,4 +303,27 @@ func nullTermIndex(data []byte) int {
 		}
 	}
 	return -1
+}
+
+func (h *PostgresHook) registerConn(conn *activeConn) {
+	h.connsMu.Lock()
+	defer h.connsMu.Unlock()
+	h.activeConns[conn] = struct{}{}
+}
+
+func (h *PostgresHook) unregisterConn(conn *activeConn) {
+	h.connsMu.Lock()
+	defer h.connsMu.Unlock()
+	delete(h.activeConns, conn)
+}
+
+func (h *PostgresHook) snapshotActiveConns() []*activeConn {
+	h.connsMu.RLock()
+	defer h.connsMu.RUnlock()
+
+	conns := make([]*activeConn, 0, len(h.activeConns))
+	for conn := range h.activeConns {
+		conns = append(conns, conn)
+	}
+	return conns
 }

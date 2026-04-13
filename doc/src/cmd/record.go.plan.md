@@ -50,14 +50,15 @@
   - `runRecordLoop(dataDir string, dbProxies []config.DBProxyConfig) error`
     - Initializes logger and storage.
     - Creates or loads the session depending on daemon child mode.
-    - Builds `capture.NewProxy(...)` with `MaxBodySize` and `ExcludePathPrefixes` from config.
     - Starts DB hooks through `startDBHooks(...)`.
+    - Builds `capture.NewProxy(...)` with `MaxBodySize`, `ExcludePathPrefixes`, and DB-hook flush wiring.
     - Runs the HTTP server until signal or timeout.
     - Finalizes the session with `SessionCompleted`, `RecordCount`, and cleared PID.
 - Shutdown behavior:
   - Uses `context.WithTimeout` for bounded recording duration.
   - Uses a 5-second graceful `server.Shutdown(...)`.
   - Stops all DB hooks with `defer stopDBHooks(hooks)`.
+  - Leaves DB-hook flush failures as warning-only inside the proxy path so capture keeps succeeding.
 
 ## 5. Dependencies
 - Internal:

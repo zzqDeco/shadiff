@@ -1,6 +1,7 @@
 package capture
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -11,6 +12,17 @@ import (
 	"shadiff/internal/model"
 	"shadiff/internal/storage"
 )
+
+type fakeFlusher struct {
+	flush func(context.Context) error
+}
+
+func (f fakeFlusher) Flush(ctx context.Context) error {
+	if f.flush == nil {
+		return nil
+	}
+	return f.flush(ctx)
+}
 
 func newProxyTestStore(t *testing.T) (*storage.FileStore, *model.Session) {
 	t.Helper()
@@ -280,5 +292,84 @@ func TestProxy_ExcludedPathsDoNotInheritUnrelatedSideEffects(t *testing.T) {
 	}
 	if len(records[0].SideEffects) != 0 {
 		t.Fatalf("sideEffects len = %d, want 0", len(records[0].SideEffects))
+	}
+}
+
+func TestProxy_FlushesSideEffectsBeforeClosingScope(t *testing.T) {
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer target.Close()
+
+	store, session := newProxyTestStore(t)
+	recorder := NewRecorder(session.ID, store)
+	defer recorder.Stop()
+
+	proxy, err := NewProxy(target.URL, recorder, ProxyOptions{
+		Flusher: fakeFlusher{flush: func(ctx context.Context) error {
+			recorder.SideEffectChan() <- model.SideEffect{
+				Type:      model.SideEffectDB,
+				DBType:    "mysql",
+				Query:     "SELECT delayed",
+				Timestamp: time.Now().UnixMilli(),
+			}
+			return nil
+		}},
+		FlushTimeout: 50 * time.Millisecond,
+	})
+	if err != nil {
+		t.Fatalf("NewProxy() error: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "http://proxy.local/api", nil)
+	resp := httptest.NewRecorder()
+	proxy.ServeHTTP(resp, req)
+
+	records, err := store.ListRecords(session.ID)
+	if err != nil {
+		t.Fatalf("ListRecords() error: %v", err)
+	}
+	if len(records) != 1 {
+		t.Fatalf("records len = %d, want 1", len(records))
+	}
+	if len(records[0].SideEffects) != 1 {
+		t.Fatalf("sideEffects len = %d, want 1", len(records[0].SideEffects))
+	}
+	if records[0].SideEffects[0].Query != "SELECT delayed" {
+		t.Fatalf("side effect query = %q, want %q", records[0].SideEffects[0].Query, "SELECT delayed")
+	}
+}
+
+func TestProxy_FlushTimeoutDoesNotPreventRecording(t *testing.T) {
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer target.Close()
+
+	store, session := newProxyTestStore(t)
+	recorder := NewRecorder(session.ID, store)
+	defer recorder.Stop()
+
+	proxy, err := NewProxy(target.URL, recorder, ProxyOptions{
+		Flusher: fakeFlusher{flush: func(ctx context.Context) error {
+			<-ctx.Done()
+			return ctx.Err()
+		}},
+		FlushTimeout: time.Millisecond,
+	})
+	if err != nil {
+		t.Fatalf("NewProxy() error: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "http://proxy.local/api", nil)
+	resp := httptest.NewRecorder()
+	proxy.ServeHTTP(resp, req)
+
+	records, err := store.ListRecords(session.ID)
+	if err != nil {
+		t.Fatalf("ListRecords() error: %v", err)
+	}
+	if len(records) != 1 {
+		t.Fatalf("records len = %d, want 1", len(records))
 	}
 }

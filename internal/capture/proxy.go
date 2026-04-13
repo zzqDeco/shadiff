@@ -2,6 +2,7 @@ package capture
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"net/http"
 	"net/http/httputil"
@@ -24,15 +25,23 @@ type Proxy struct {
 	target       *url.URL
 	proxy        *httputil.ReverseProxy
 	recorder     *Recorder
+	flusher      sideEffectFlusher
+	flushTimeout time.Duration
 	maxBodySize  int64
 	excludePaths []string
 	sequence     atomic.Int64
+}
+
+type sideEffectFlusher interface {
+	Flush(context.Context) error
 }
 
 // ProxyOptions controls optional capture-time behavior.
 type ProxyOptions struct {
 	MaxBodySize         int64
 	ExcludePathPrefixes []string
+	Flusher             sideEffectFlusher
+	FlushTimeout        time.Duration
 }
 
 // NewProxy creates a reverse proxy instance.
@@ -45,6 +54,8 @@ func NewProxy(targetURL string, recorder *Recorder, opts ProxyOptions) (*Proxy, 
 	p := &Proxy{
 		target:       target,
 		recorder:     recorder,
+		flusher:      opts.Flusher,
+		flushTimeout: opts.FlushTimeout,
 		maxBodySize:  opts.MaxBodySize,
 		excludePaths: append([]string(nil), opts.ExcludePathPrefixes...),
 	}
@@ -135,6 +146,7 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	p.proxy.ServeHTTP(rr, r)
 
 	duration := time.Since(startTime).Milliseconds()
+	p.flushSideEffects()
 
 	// Build HTTPResponse
 	httpResp := model.HTTPResponse{
@@ -166,6 +178,23 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		"duration_ms", duration,
 		"sequence", seq,
 	)
+}
+
+func (p *Proxy) flushSideEffects() {
+	if p.flusher == nil {
+		return
+	}
+
+	ctx := context.Background()
+	cancel := func() {}
+	if p.flushTimeout > 0 {
+		ctx, cancel = context.WithTimeout(ctx, p.flushTimeout)
+	}
+	defer cancel()
+
+	if err := p.flusher.Flush(ctx); err != nil {
+		logger.Warn("capture side-effect flush failed", "error", err.Error())
+	}
 }
 
 // director modifies the request target to the proxied service

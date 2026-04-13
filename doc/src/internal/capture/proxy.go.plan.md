@@ -24,18 +24,19 @@
 
 ## 4. Key Implementation Details
 - Structs/interfaces:
-  - `Proxy` -- Main struct holding the parsed target URL, the stdlib `httputil.ReverseProxy`, a `*Recorder` reference, and an atomic sequence counter.
+  - `Proxy` -- Main struct holding the parsed target URL, the stdlib `httputil.ReverseProxy`, a `*Recorder` reference, an optional side-effect flusher plus flush timeout, and an atomic sequence counter.
   - `requestBodyCapture` -- Internal request-body snapshot helper that captures the full request body, stores only the configured preview inline, and spills large payloads to a temporary file before optional artifact persistence.
   - `responseRecorder` -- An `http.ResponseWriter` wrapper that intercepts `WriteHeader` and `Write` calls to capture the response status code and body while still forwarding data to the real writer.
 - Exported functions/methods:
   - `NewProxy(targetURL string, recorder *Recorder, opts ProxyOptions) (*Proxy, error)` -- Parses the target URL and constructs a configured reverse proxy with capture options.
-  - `(*Proxy).ServeHTTP(w http.ResponseWriter, r *http.Request)` -- Implements `http.Handler`. Skips excluded paths early, snapshots included request bodies before proxying, optionally persists a full request-body artifact, proxies to the target, captures the response, builds a `model.Record`, and asks the recorder to close the scope and persist it.
+  - `(*Proxy).ServeHTTP(w http.ResponseWriter, r *http.Request)` -- Implements `http.Handler`. Skips excluded paths early, snapshots included request bodies before proxying, optionally persists a full request-body artifact, proxies to the target, flushes DB-hook side effects when configured, captures the response, builds a `model.Record`, and asks the recorder to close the scope and persist it.
 - Key behaviors:
   - Excluded paths are forwarded without request capture or artifact work.
   - Included request bodies are fully snapshotted before proxying so capture fidelity no longer depends on how much of the body the upstream target reads.
   - `Request.Body` stores only the configured prefix while `Request.BodyLen` keeps the full observed body size.
   - When the inline preview is truncated, the full request body is stored as a session artifact and referenced by `Request.BodyRef`.
   - Included requests open a recorder request scope before proxying and close it after response capture so DB side effects can be attached by timestamp.
+  - When a flusher is configured, the proxy invokes it after the upstream response completes and before `FinishRequestScope(...)` so already-observed DB traffic reaches the recorder sink first.
   - Each request gets a monotonically increasing sequence number via `atomic.Int64`.
   - Record IDs are the first 8 characters of a UUID v4.
   - `responseRecorder` uses a `wroteHeader` flag to ensure `WriteHeader` is called at most once on the underlying writer, preventing double-write panics.
@@ -48,9 +49,10 @@
   - `shadiff/internal/logger` -- Structured logging for capture events and errors.
   - `shadiff/internal/model` -- Data types (`HTTPRequest`, `HTTPResponse`, `Record`, `SideEffect`).
 - External:
+  - `context` -- Optional DB-hook flush barrier invocation.
   - `net/http`, `net/http/httputil` -- Reverse proxy and HTTP handler primitives.
   - `net/url` -- Target URL parsing.
-  - `bytes`, `io` -- Request and response body capture buffers and streaming wrappers.
+  - `bytes`, `io`, `os` -- Request and response body capture buffers, streaming wrappers, and spill-file lifecycle.
   - `sync/atomic` -- Lock-free sequence counter.
   - `time` -- Duration measurement and timestamps.
   - `github.com/google/uuid` -- Record ID generation.
