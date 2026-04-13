@@ -116,7 +116,7 @@ shadiff diff -s "user-module-migration" --ignore-order -r rules.yaml
 | `--ignore-headers` | | | No | Additional headers to ignore (repeatable) |
 | `--output` | `-o` | `terminal` | No | Output format: `terminal`, `json` |
 
-**Behavior**: Loads recorded and replayed records, pairs them by sequence number, and compares status codes, response headers, JSON response bodies (structural diff), and side effect counts. Applies built-in and user-defined rules to mark expected differences as ignored. Saves results to `diff-results.json` and prints a summary.
+**Behavior**: Loads recorded and replayed records, pairs them by sequence number, and compares status codes, response headers, JSON response bodies (structural diff), and side effect counts. Applies built-in and user-defined rules to mark expected differences as ignored. Saves results to `diff-results.json` and then renders either terminal output or JSON output based on `--output`.
 
 ---
 
