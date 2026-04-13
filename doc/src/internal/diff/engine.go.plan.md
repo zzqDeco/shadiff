@@ -31,15 +31,19 @@
     4. Saves results to storage and logs events.
 - Unexported functions/methods:
   - `compareRecords(original, replay)` -- performs four-phase comparison:
+    0. If `replay.Error` is populated, emits a single replay-failure difference and skips the rest of the comparison.
     1. Status code comparison.
     2. Header comparison (respecting `ignoreHeaders`).
     3. JSON body comparison via `JSONDiffer.Compare`.
-    4. Side effect count comparison.
+    4. SQL side-effect comparison via `CompareDBSideEffects`.
+    5. MongoDB side-effect comparison via `CompareMongoSideEffects`.
+    6. Residual non-DB side-effect count comparison.
     5. Applies `RuleSet` to mark ignorable differences.
     6. Determines overall match (true only if all non-ignored differences are absent).
   - `compareHeaders(expected, actual)` -- iterates expected headers, skipping ignored ones, and reports missing or differing headers as warnings.
 - Key behaviors:
   - Records are matched by sequence number, not by ID or request content.
+  - Replay records with `Error` set are surfaced as explicit diff failures rather than being treated as missing replay data.
   - A result is marked as `Match: true` only if every difference is `Ignored`.
   - Header differences are reported as warnings; status code and body differences are errors.
 
@@ -59,6 +63,6 @@
 
 ## 7. Maintenance Notes
 - The `NumericToleranceMatcher` tolerance (0.001) is hardcoded; consider making it configurable via `EngineConfig`.
-- Side effect comparison in `compareRecords` only checks count; detailed DB/Mongo comparison functions exist in `db.go` and `mongo.go` but are not currently called from the engine. Integration may be needed.
+- SQL and MongoDB side effects are compared semantically through the dedicated helper comparers; residual count comparison remains only for non-SQL/non-Mongo side effects.
 - Header comparison only checks expected headers against actual; extra headers in the replay response are not reported.
 - Errors during `SaveResults` are logged but do not fail the run; callers should be aware that results may not be persisted.

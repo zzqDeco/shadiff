@@ -137,13 +137,15 @@ DB hooks operate as TCP proxies that sit between the application and the real da
 2. Records are dispatched to the `WorkerPool`:
    - Sequential mode (concurrency=1): records are replayed one by one with optional delay.
    - Concurrent mode (concurrency>1): records are distributed to N worker goroutines via a buffered job channel.
+   - If replay DB proxy capture is enabled, replay stays in sequential mode so side effects can be attributed by request window.
 3. For each record, `replay.Transform()` converts `model.HTTPRequest` into a Go `*http.Request`:
    - Rewrites the base URL to the new target.
    - Copies original headers, applies overrides, removes proxy headers (`X-Forwarded-*`).
 4. The worker sends the request via `http.Client` and captures the response.
-5. A new `model.Record` is built for the replay result (preserving the original sequence number for pairing).
-6. Results are saved to `replay-records.jsonl`.
-7. Session status is updated to `replayed`.
+5. When replay DB capture is enabled, side effects emitted by replay DB hooks are collected and attached to the replay record whose start/end window contains the effect timestamp.
+6. A new `model.Record` is built for the replay result (preserving the original sequence number for pairing). Failed replays are still persisted with `Error` populated.
+7. Results are saved to `replay-records.jsonl`.
+8. Session status is updated to `replayed`.
 
 ### 2.4 Diff Phase
 
@@ -164,9 +166,9 @@ DB hooks operate as TCP proxies that sit between the application and the real da
            +-------+-------+
                    |
      +-------------+-------------+
-     |             |             |
-  status code   headers       body (JSON)
-  comparison   comparison    recursive diff
+     |             |             |             |
+  status code   headers       body (JSON)   DB side effects
+  comparison   comparison    recursive diff semantic compare
                    |
               +----v-----+
               | Rule Set |  (ignore/custom matchers)
@@ -189,7 +191,7 @@ DB hooks operate as TCP proxies that sit between the application and the real da
      - Array diff: ordered (index-by-index) or unordered (best-match pairing).
      - Scalar diff: type-aware with numeric type coercion.
      - Non-JSON bodies fall back to byte-level comparison.
-   - **Side effects**: count comparison for DB operations.
+   - **Side effects**: semantic SQL and MongoDB comparison, plus residual non-DB side-effect count fallback.
 5. The `RuleSet` is applied to all differences:
    - `ignore` rules: mark matching paths as ignored (e.g., timestamp fields).
    - `custom` rules: invoke `Matcher` implementations (timestamp, UUID, numeric tolerance).
