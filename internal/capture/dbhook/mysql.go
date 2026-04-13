@@ -20,6 +20,8 @@ type MySQLHook struct {
 	sideEffects chan model.SideEffect
 	done        chan struct{}
 	wg          sync.WaitGroup
+	connsMu     sync.RWMutex
+	activeConns map[*activeConn]struct{}
 }
 
 // MySQL protocol constants
@@ -35,6 +37,7 @@ func NewMySQLHook(listenAddr, targetAddr string) *MySQLHook {
 		targetAddr:  targetAddr,
 		sideEffects: make(chan model.SideEffect, 1000),
 		done:        make(chan struct{}),
+		activeConns: make(map[*activeConn]struct{}),
 	}
 }
 
@@ -85,6 +88,27 @@ func (h *MySQLHook) Start(ctx context.Context) error {
 	return nil
 }
 
+func (h *MySQLHook) Flush(ctx context.Context) error {
+	for _, conn := range h.snapshotActiveConns() {
+		ack := make(chan struct{})
+		select {
+		case conn.flushCh <- ack:
+		case <-conn.done:
+			continue
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+
+		select {
+		case <-ack:
+		case <-conn.done:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	return nil
+}
+
 func (h *MySQLHook) Stop() error {
 	close(h.done)
 	if h.listener != nil {
@@ -106,6 +130,15 @@ func (h *MySQLHook) handleConn(clientConn net.Conn) {
 	}
 	defer serverConn.Close()
 
+	conn := &activeConn{
+		client:  clientConn,
+		server:  serverConn,
+		flushCh: make(chan chan struct{}),
+		done:    make(chan struct{}),
+	}
+	h.registerConn(conn)
+	defer h.unregisterConn(conn)
+
 	// Bidirectional forwarding while sniffing client-to-server data
 	var wg sync.WaitGroup
 
@@ -120,28 +153,67 @@ func (h *MySQLHook) handleConn(clientConn net.Conn) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		h.sniffClientToServer(clientConn, serverConn)
+		defer close(conn.done)
+		h.sniffClientToServer(conn)
 	}()
 
 	wg.Wait()
 }
 
 // sniffClientToServer sniffs data sent by the client and parses MySQL protocol packets
-func (h *MySQLHook) sniffClientToServer(client, server net.Conn) {
+func (h *MySQLHook) sniffClientToServer(conn *activeConn) {
 	buf := make([]byte, 64*1024)
 	for {
-		n, err := client.Read(buf)
+		select {
+		case ack := <-conn.flushCh:
+			h.flushConn(conn, buf)
+			close(ack)
+			continue
+		default:
+		}
+
+		_ = conn.client.SetReadDeadline(time.Now().Add(hookReadPollInterval))
+		n, err := conn.client.Read(buf)
 		if err != nil {
+			if ne, ok := err.(net.Error); ok && ne.Timeout() {
+				continue
+			}
 			return
 		}
 
 		// Forward to server
-		if _, err := server.Write(buf[:n]); err != nil {
+		if _, err := conn.server.Write(buf[:n]); err != nil {
 			return
 		}
 
 		// Try to parse MySQL packet
 		h.parseMySQLPacket(buf[:n])
+	}
+}
+
+func (h *MySQLHook) flushConn(conn *activeConn, buf []byte) {
+	idleDeadline := time.Now().Add(hookFlushIdleWindow)
+	for {
+		remaining := time.Until(idleDeadline)
+		if remaining <= 0 {
+			return
+		}
+
+		_ = conn.client.SetReadDeadline(time.Now().Add(remaining))
+		n, err := conn.client.Read(buf)
+		if n > 0 {
+			if _, writeErr := conn.server.Write(buf[:n]); writeErr != nil {
+				return
+			}
+			h.parseMySQLPacket(buf[:n])
+			idleDeadline = time.Now().Add(hookFlushIdleWindow)
+		}
+		if err != nil {
+			if ne, ok := err.(net.Error); ok && ne.Timeout() {
+				return
+			}
+			return
+		}
 	}
 }
 
@@ -194,4 +266,27 @@ func readMySQLPacketLength(data []byte) int {
 		return 0
 	}
 	return int(binary.LittleEndian.Uint32(append(data[:3], 0)))
+}
+
+func (h *MySQLHook) registerConn(conn *activeConn) {
+	h.connsMu.Lock()
+	defer h.connsMu.Unlock()
+	h.activeConns[conn] = struct{}{}
+}
+
+func (h *MySQLHook) unregisterConn(conn *activeConn) {
+	h.connsMu.Lock()
+	defer h.connsMu.Unlock()
+	delete(h.activeConns, conn)
+}
+
+func (h *MySQLHook) snapshotActiveConns() []*activeConn {
+	h.connsMu.RLock()
+	defer h.connsMu.RUnlock()
+
+	conns := make([]*activeConn, 0, len(h.activeConns))
+	for conn := range h.activeConns {
+		conns = append(conns, conn)
+	}
+	return conns
 }

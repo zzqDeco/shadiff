@@ -21,7 +21,7 @@
   - `chan<- model.SideEffect` used as the sink for emitted side effects
 - Outputs:
   - Parsed `[]config.DBProxyConfig`
-  - Started `[]dbhook.DBHook`
+  - A started `*dbhook.Group`
   - Side effects copied into the supplied sink channel
 
 ## 4. Key Implementation Details
@@ -29,13 +29,13 @@
   - `resolveRecordDBProxies(...)` implements precedence: if the flag changed, parse CLI values; otherwise clone config values.
   - `resolveReplayDBProxies(...)` parses replay CLI values only; if the flag was not set, replay DB proxies stay empty.
   - `parseDBProxySpec(spec string)` parses strings like `mysql://:13306->127.0.0.1:3306`.
-  - `startDBHooks(...)` constructs each hook, starts it, and launches one goroutine per hook to fan side effects into the provided sink channel.
-  - `stopDBHooks(...)` best-effort stops all hooks.
+  - `startDBHooks(...)` constructs each hook, starts it, and returns a `dbhook.Group` that owns side-effect fan-in plus flush/drain coordination into the provided sink channel.
+  - `stopDBHooks(...)` best-effort stops any grouped hook owner that implements `Stop() error`.
 - Testability:
   - `newDBHook` defaults to `dbhook.NewHook` and is replaceable in tests so failure cleanup paths can be exercised.
 - Failure behavior:
   - If hook construction or startup fails, previously started hooks are stopped before the error is returned.
-  - Hook forwarders stop early if the controlling context is canceled, which prevents replay shutdown from blocking on sink backpressure.
+  - Group forwarders stop early if the controlling context is canceled, which prevents replay shutdown from blocking on sink backpressure.
 
 ## 5. Dependencies
 - Internal:

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"shadiff/internal/capture"
+	"shadiff/internal/capture/dbhook"
 	"shadiff/internal/config"
 	"shadiff/internal/daemon"
 	"shadiff/internal/logger"
@@ -236,21 +237,6 @@ func runRecordLoop(dataDir string, dbProxies []config.DBProxyConfig) error {
 	recorder := capture.NewRecorder(session.ID, store)
 	defer recorder.Stop()
 
-	// Create proxy
-	proxy, err := capture.NewProxy(recordTarget, recorder, capture.ProxyOptions{
-		MaxBodySize:         currentConfig().Capture.MaxBodySize,
-		ExcludePathPrefixes: currentConfig().Capture.ExcludePaths,
-	})
-	if err != nil {
-		return fmt.Errorf("failed to create proxy: %w", err)
-	}
-
-	// Start HTTP server
-	server := &http.Server{
-		Addr:    recordListen,
-		Handler: proxy,
-	}
-
 	// Context and signal handling
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -270,6 +256,21 @@ func runRecordLoop(dataDir string, dbProxies []config.DBProxyConfig) error {
 		return fmt.Errorf("failed to start db hooks: %w", err)
 	}
 	defer stopDBHooks(hooks)
+	proxy, err := capture.NewProxy(recordTarget, recorder, capture.ProxyOptions{
+		MaxBodySize:         currentConfig().Capture.MaxBodySize,
+		ExcludePathPrefixes: currentConfig().Capture.ExcludePaths,
+		Flusher:             hooks,
+		FlushTimeout:        dbhook.DefaultFlushTimeout,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to create proxy: %w", err)
+	}
+
+	// Start HTTP server
+	server := &http.Server{
+		Addr:    recordListen,
+		Handler: proxy,
+	}
 
 	// Signal handling
 	sigCh := make(chan os.Signal, 1)

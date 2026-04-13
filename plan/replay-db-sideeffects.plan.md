@@ -12,6 +12,7 @@ This iteration implements the review-finding subset:
 - replay with DB proxy capture is forced to `concurrency == 1`
 - replay failures are still persisted into `replay-records.jsonl`
 - diff integrates the existing SQL and MongoDB semantic comparers
+- replay-side DB attribution is synchronized with an explicit DB-hook flush barrier before each replay window is finalized
 
 Deferred follow-up items remain:
 

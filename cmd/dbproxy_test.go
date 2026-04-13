@@ -12,9 +12,11 @@ import (
 
 type fakeDBHook struct {
 	startErr     error
+	flushErr     error
 	stopped      bool
 	sideEffects  chan model.SideEffect
 	startInvoked bool
+	flushInvoked bool
 }
 
 func (f *fakeDBHook) Start(ctx context.Context) error {
@@ -28,6 +30,11 @@ func (f *fakeDBHook) Stop() error {
 		close(f.sideEffects)
 	}
 	return nil
+}
+
+func (f *fakeDBHook) Flush(_ context.Context) error {
+	f.flushInvoked = true
+	return f.flushErr
 }
 
 func (f *fakeDBHook) SideEffects() <-chan model.SideEffect {

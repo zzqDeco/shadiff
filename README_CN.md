@@ -145,6 +145,7 @@ shadiff record -t http://old-api:8080 -l :18080 \
 ```
 
 将流量指向 `localhost:18080` 而非老 API。所有请求、响应和数据库操作都会被记录。
+当录制启用 DB 代理时，Shadiff 会在每个请求 scope 关闭前先 flush DB hook 投递的副作用，尽量减少“窗口内发生、稍后送达”的副作用丢失。
 
 #### 守护进程模式
 
@@ -173,6 +174,7 @@ shadiff replay -s "migration-v1" -t http://new-api:9090 \
 ```
 
 当 replay 启用 `--db-proxy` 时，DB side effect 会写入 `replay-records.jsonl`，并且回放必须保持串行（`--concurrency 1`）。
+回放在每条请求窗口收口前也会先 flush DB-hook telemetry，让语义 diff 更稳定地拿到窗口内的 SQL 和 Mongo 副作用。
 
 ### 3. 对比结果
 

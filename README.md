@@ -145,6 +145,7 @@ shadiff record -t http://old-api:8080 -l :18080 \
 ```
 
 Point your traffic to `localhost:18080` instead of the old API. All requests, responses, and database operations are recorded.
+When recording uses DB proxies, Shadiff flushes hook-delivered side effects before each request scope closes so late-delivered in-window effects are less likely to be lost.
 
 #### Daemon Mode
 
@@ -173,6 +174,7 @@ shadiff replay -s "migration-v1" -t http://new-api:9090 \
 ```
 
 When replay uses `--db-proxy`, DB side effects are captured into `replay-records.jsonl` and replay must stay serial (`--concurrency 1`).
+Replay also flushes DB-hook telemetry before each request window is finalized so semantic diff sees in-window SQL and Mongo side effects more reliably.
 
 ### 3. Compare Results
 

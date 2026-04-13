@@ -94,7 +94,7 @@ func runReplay(cmd *cobra.Command, args []string) error {
 
 	var (
 		sideEffectCh chan model.SideEffect
-		hooks        []dbhook.DBHook
+		hooks        *dbhook.Group
 		hookCancel   context.CancelFunc
 	)
 	if len(dbProxies) > 0 {
@@ -106,8 +106,8 @@ func runReplay(cmd *cobra.Command, args []string) error {
 			hookCancel()
 			return fmt.Errorf("failed to start replay db hooks: %w", err)
 		}
-		defer stopDBHooks(hooks)
 		defer hookCancel()
+		defer stopDBHooks(hooks)
 	}
 
 	// Create replay engine
@@ -119,6 +119,8 @@ func runReplay(cmd *cobra.Command, args []string) error {
 		RetryCount:   cfg.Replay.RetryCount,
 		Delay:        delay,
 		SideEffectCh: sideEffectCh,
+		Flusher:      hooks,
+		FlushTimeout: dbhook.DefaultFlushTimeout,
 	})
 
 	// Execute replay

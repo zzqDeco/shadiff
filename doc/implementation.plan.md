@@ -40,11 +40,11 @@ This document maps every package, source file, and key implementation pattern in
 | `root.go` | Root cobra command (`shadiff`); defines global flags (`--config`, `--verbose`, `--quiet`) and initializes runtime config in `PersistentPreRunE` |
 | `version.go` | `shadiff version` command; prints build-time injected Version, Commit, BuildDate |
 | `runtime.go` | Shared runtime context for config path, loaded config, data directory, log directory, and flag-over-config precedence helpers |
-| `dbproxy.go` | Helper logic for record/replay DB proxy parsing, config fallback for capture, hook startup, and side-effect fan-in |
-| `record.go` | `shadiff record` command; resolves config-backed capture settings, starts HTTP reverse proxy plus DB hooks, and supports `--daemon` mode via self-re-exec |
+| `dbproxy.go` | Helper logic for record/replay DB proxy parsing, config fallback for capture, hook startup, grouped side-effect fan-in, and flush-aware shutdown |
+| `record.go` | `shadiff record` command; resolves config-backed capture settings, starts HTTP reverse proxy plus DB hooks, wires DB-hook flushing into capture, and supports `--daemon` mode via self-re-exec |
 | `record_stop.go` | `shadiff record stop` subcommand; stops a daemon recording session by sending signals (SIGTERM/os.Interrupt), with graceful wait and force kill fallback; includes `findSession()` helper for ID/name resolution |
 | `record_status.go` | `shadiff record status` subcommand; lists all active recording sessions or shows detailed status for a specific session including PID, process liveness, record count, and uptime |
-| `replay.go` | `shadiff replay` command; resolves session, creates replay engine, executes replay, prints summary; also contains `resolveSession()` helper |
+| `replay.go` | `shadiff replay` command; resolves session, starts optional replay DB hooks, creates replay engine, executes replay, prints summary; also contains `resolveSession()` helper |
 | `diff.go` | `shadiff diff` command; creates diff engine, runs comparison, and renders either terminal output or JSON output |
 | `report.go` | `shadiff report` command; loads saved diff results, creates reporter by format, writes output to file or stdout |
 | `session.go` | `shadiff session` parent command with `list`, `show`, `delete` subcommands; contains `getStore()` helper |
@@ -69,7 +69,7 @@ This document maps every package, source file, and key implementation pattern in
 
 | File | Description |
 |------|-------------|
-| `hook.go` | `DBHook` interface definition, `Config` struct, `NewHook()` factory function, `UnsupportedDBError` type |
+| `hook.go` | `DBHook` interface definition, hook flush coordination, `Group` fan-in/drain helper, `Config` struct, `NewHook()` factory function, `UnsupportedDBError` type |
 | `mysql.go` | MySQL protocol proxy; TCP listener with bidirectional forwarding; parses COM_QUERY/COM_STMT_PREPARE from the MySQL packet format (3-byte LE length + seq + command byte + payload) |
 | `postgres.go` | PostgreSQL protocol proxy; TCP listener with startup-phase detection; parses frontend Simple Query (`Q`) and Parse (`P`) messages using big-endian length-prefixed format |
 | `mongo.go` | MongoDB protocol proxy; parses OP_MSG wire protocol (opcode 2013); extracts CRUD commands via simplified BSON-to-map parsing; includes `MongoCommandToJSON()` helper |
@@ -122,7 +122,7 @@ This document maps every package, source file, and key implementation pattern in
 
 | File | Description |
 |------|-------------|
-| `engine.go` | Replay engine; reads recorded records from storage, executes replay, optionally attributes replay DB side effects by request window, saves replay records to `replay-records.jsonl` |
+| `engine.go` | Replay engine; reads recorded records from storage, executes replay, flushes replay DB hooks before request-window attribution, and saves replay records to `replay-records.jsonl` |
 | `worker.go` | `WorkerPool` struct; concurrent replay with configurable worker count and inter-request delay; `replayOne()` sends a single HTTP request, preferring stored full-body artifacts when present, and captures the response as a new `Record` |
 | `transform.go` | `TransformConfig`, `Transform()`, and `TransformWithBody()`; rewrites recorded requests for the replay target (URL, headers, proxy header removal) and supports artifact-backed request bodies |
 | `transform_test.go` | Tests for request transformation |
@@ -169,7 +169,7 @@ Client  --->  Proxy.ServeHTTP()  --->  ReverseProxy  --->  Target Service
 
 - Excluded paths are checked before request capture begins.
 - Included request bodies are fully snapshotted before proxying, keep only the configured inline preview in `Request.Body`, and store replayable full-body artifacts when the preview is truncated.
-- Included requests open a recorder scope before proxying and close it after response capture so side effects can be attached within the request time window.
+- Included requests open a recorder scope before proxying and, when DB hooks are configured, flush hook-delivered side effects before the scope is closed so in-window effects reach the recorder sink first.
 - `responseRecorder.Write()` tees data: it writes to both its internal `bytes.Buffer` (for capture) and the underlying `ResponseWriter` (for the client).
 - `responseRecorder.WriteHeader()` uses a `wroteHeader` guard to prevent double writes.
 - Sequence numbers are assigned atomically via `atomic.Int64.Add(1)`.
