@@ -2,10 +2,14 @@ package cmd
 
 import (
 	"fmt"
+	"io"
+	"os"
+	"strings"
 
 	"shadiff/internal/diff"
 	"shadiff/internal/logger"
 	"shadiff/internal/model"
+	"shadiff/internal/reporter"
 	"shadiff/internal/storage"
 
 	"github.com/spf13/cobra"
@@ -89,27 +93,58 @@ func runDiff(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("diff failed: %w", err)
 	}
 
-	// Output results
-	printDiffResults(results)
+	summary := diff.FormatDiffSummary(results)
+	summary.SessionID = sessionID
+
+	if err := writeDiffResults(cmd, results, summary, os.Stdout); err != nil {
+		return err
+	}
 
 	return nil
 }
 
-func printDiffResults(results []model.DiffResult) {
-	fmt.Println()
-	fmt.Println("━━ Diff Report ━━")
+func writeDiffResults(cmd *cobra.Command, results []model.DiffResult, summary model.DiffSummary, w io.Writer) error {
+	switch strings.ToLower(currentDiffOutput(cmd)) {
+	case "", "terminal":
+		printDiffResults(w, results, summary)
+		return nil
+	case "json":
+		return (&reporter.JSONReporter{}).Generate(results, summary, w)
+	default:
+		return fmt.Errorf("unsupported diff output format: %s", currentDiffOutput(cmd))
+	}
+}
+
+func currentDiffOutput(cmd *cobra.Command) string {
+	if cmd != nil {
+		flags := cmd.Flags()
+		if flags != nil && flags.Lookup("output") != nil {
+			if output, err := flags.GetString("output"); err == nil && output != "" {
+				return output
+			}
+		}
+	}
+	if diffOutput == "" {
+		return "terminal"
+	}
+	return diffOutput
+}
+
+func printDiffResults(w io.Writer, results []model.DiffResult, summary model.DiffSummary) {
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "━━ Diff Report ━━")
 
 	for _, r := range results {
 		method := r.Request.Method
 		path := r.Request.Path
 
 		if r.Match {
-			fmt.Printf("  ✔ %-7s %s  [MATCH]\n", method, path)
+			fmt.Fprintf(w, "  ✔ %-7s %s  [MATCH]\n", method, path)
 		} else {
-			fmt.Printf("  ✘ %-7s %s  [DIFF]\n", method, path)
+			fmt.Fprintf(w, "  ✘ %-7s %s  [DIFF]\n", method, path)
 			for _, d := range r.Differences {
 				if d.Ignored {
-					fmt.Printf("    ├ %s: ignored(%s)\n", d.Path, d.Rule)
+					fmt.Fprintf(w, "    ├ %s: ignored(%s)\n", d.Path, d.Rule)
 				} else {
 					severity := "error"
 					switch d.Severity {
@@ -119,20 +154,19 @@ func printDiffResults(results []model.DiffResult) {
 						severity = "info"
 					}
 					if d.Path != "" {
-						fmt.Printf("    └ %s: %v ≠ %v\n", d.Path, d.Expected, d.Actual)
+						fmt.Fprintf(w, "    └ %s: %v ≠ %v\n", d.Path, d.Expected, d.Actual)
 					} else {
-						fmt.Printf("    └ %s\n", d.Message)
+						fmt.Fprintf(w, "    └ %s\n", d.Message)
 					}
-					fmt.Printf("      severity: %s\n", severity)
+					fmt.Fprintf(w, "      severity: %s\n", severity)
 				}
 			}
 		}
 	}
 
 	// Summary
-	summary := diff.FormatDiffSummary(results)
-	fmt.Println("────────────────")
-	fmt.Printf("Total: %d records, %d matched, %d differences\n",
+	fmt.Fprintln(w, "────────────────")
+	fmt.Fprintf(w, "Total: %d records, %d matched, %d differences\n",
 		summary.TotalCount, summary.MatchCount, summary.DiffCount)
-	fmt.Printf("Match rate: %.0f%%\n", summary.MatchRate*100)
+	fmt.Fprintf(w, "Match rate: %.0f%%\n", summary.MatchRate*100)
 }
