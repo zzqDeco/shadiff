@@ -180,6 +180,9 @@ shadiff diff -s "migration-v1"
 
 # With custom rules (ignore timestamps, UUIDs)
 shadiff diff -s "migration-v1" -r rules.yaml --ignore-order
+
+# JSON output for scripts/CI
+shadiff diff -s "migration-v1" -o json
 ```
 
 ### 4. Generate Report

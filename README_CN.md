@@ -180,6 +180,9 @@ shadiff diff -s "migration-v1"
 
 # 使用自定义规则（忽略时间戳、UUID）
 shadiff diff -s "migration-v1" -r rules.yaml --ignore-order
+
+# 面向脚本/CI 的 JSON 输出
+shadiff diff -s "migration-v1" -o json
 ```
 
 ### 4. 生成报告

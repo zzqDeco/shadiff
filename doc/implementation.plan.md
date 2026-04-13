@@ -45,7 +45,7 @@ This document maps every package, source file, and key implementation pattern in
 | `record_stop.go` | `shadiff record stop` subcommand; stops a daemon recording session by sending signals (SIGTERM/os.Interrupt), with graceful wait and force kill fallback; includes `findSession()` helper for ID/name resolution |
 | `record_status.go` | `shadiff record status` subcommand; lists all active recording sessions or shows detailed status for a specific session including PID, process liveness, record count, and uptime |
 | `replay.go` | `shadiff replay` command; resolves session, creates replay engine, executes replay, prints summary; also contains `resolveSession()` helper |
-| `diff.go` | `shadiff diff` command; creates diff engine, runs comparison, prints results with `printDiffResults()` |
+| `diff.go` | `shadiff diff` command; creates diff engine, runs comparison, and renders either terminal output or JSON output |
 | `report.go` | `shadiff report` command; loads saved diff results, creates reporter by format, writes output to file or stdout |
 | `session.go` | `shadiff session` parent command with `list`, `show`, `delete` subcommands; contains `getStore()` helper |
 
