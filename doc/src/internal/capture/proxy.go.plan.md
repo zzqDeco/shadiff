@@ -29,11 +29,12 @@
   - `responseRecorder` -- An `http.ResponseWriter` wrapper that intercepts `WriteHeader` and `Write` calls to capture the response status code and body while still forwarding data to the real writer.
 - Exported functions/methods:
   - `NewProxy(targetURL string, recorder *Recorder, opts ProxyOptions) (*Proxy, error)` -- Parses the target URL and constructs a configured reverse proxy with capture options.
-  - `(*Proxy).ServeHTTP(w http.ResponseWriter, r *http.Request)` -- Implements `http.Handler`. Skips excluded paths early, wraps included request bodies with a streaming capture tap, proxies to the target, captures the response, builds a `model.Record`, and hands it to the recorder.
+  - `(*Proxy).ServeHTTP(w http.ResponseWriter, r *http.Request)` -- Implements `http.Handler`. Skips excluded paths early, opens a recorder request scope for included traffic, wraps request bodies with a streaming capture tap, proxies to the target, captures the response, builds a `model.Record`, and asks the recorder to close the scope and persist it.
 - Key behaviors:
   - Excluded paths are forwarded without request capture work.
   - Included request bodies are captured via a streaming wrapper instead of an eager `io.ReadAll`.
   - `Request.Body` stores only the configured prefix while `Request.BodyLen` keeps the full observed body size.
+  - Included requests open a recorder request scope before proxying and close it after response capture so DB side effects can be attached by timestamp.
   - Each request gets a monotonically increasing sequence number via `atomic.Int64`.
   - Record IDs are the first 8 characters of a UUID v4.
   - `responseRecorder` uses a `wroteHeader` flag to ensure `WriteHeader` is called at most once on the underlying writer, preventing double-write panics.
@@ -54,7 +55,7 @@
   - `github.com/google/uuid` -- Record ID generation.
 
 ## 6. Change Impact
-- `internal/capture/recorder.go` -- `Proxy` calls `Recorder.Record()` directly; changes to the `Record` struct or recorder API require updates here.
+- `internal/capture/recorder.go` -- `Proxy` calls `Recorder.BeginRequestScope()` / `FinishRequestScope()` directly; changes to the recorder scope API require updates here.
 - `internal/model/` -- Any changes to `HTTPRequest`, `HTTPResponse`, or `Record` fields affect the record-building logic in `ServeHTTP`.
 - Any code that instantiates `NewProxy` (typically the CLI or server setup) is affected if the constructor signature changes.
 - `requestBodyCapture` and `responseRecorder` are unexported and self-contained; changes are localized unless the capture semantics change.
