@@ -93,9 +93,9 @@ shadiff replay -s "user-module-migration" -t http://localhost:9090 -c 5
 | `--target` | `-t` | | Yes | Replay target address (e.g. `http://localhost:9090`) |
 | `--concurrency` | `-c` | `1` | No | Concurrency level (worker pool size) |
 | `--delay` | | | No | Delay between requests (e.g. `100ms`) |
-| `--db-proxy` | | | No | DB proxy specification (repeatable) |
+| `--db-proxy` | | | No | DB proxy specification (repeatable); enables replay-time DB side-effect capture and requires `--concurrency 1` |
 
-**Behavior**: Resolves the session by ID or name, loads all recorded records, replays them against the target using a configurable worker pool, and saves replay records to `replay-records.jsonl`. Updates the session status to `replayed`.
+**Behavior**: Resolves the session by ID or name, loads all recorded records, replays them against the target using a configurable worker pool, and saves replay records to `replay-records.jsonl`. When `--db-proxy` is set, replay also captures DB side effects into replay records using request-window attribution. Updates the session status to `replayed`.
 
 ---
 
@@ -116,7 +116,7 @@ shadiff diff -s "user-module-migration" --ignore-order -r rules.yaml
 | `--ignore-headers` | | | No | Additional headers to ignore (repeatable) |
 | `--output` | `-o` | `terminal` | No | Output format: `terminal`, `json` |
 
-**Behavior**: Loads recorded and replayed records, pairs them by sequence number, and compares status codes, response headers, JSON response bodies (structural diff), and side effect counts. Applies built-in and user-defined rules to mark expected differences as ignored. Saves results to `diff-results.json` and then renders either terminal output or JSON output based on `--output`.
+**Behavior**: Loads recorded and replayed records, pairs them by sequence number, reports replay failures explicitly, and compares status codes, response headers, JSON response bodies (structural diff), SQL side effects, and MongoDB side effects. Applies built-in and user-defined rules to mark expected differences as ignored. Saves results to `diff-results.json` and then renders either terminal output or JSON output based on `--output`.
 
 ---
 
@@ -425,7 +425,7 @@ Records are paired between the `record` and `replay` phases using the `Sequence`
 
 1. During recording, the `Proxy` assigns a monotonically increasing sequence number (via `atomic.Int64`) to each captured request.
 2. During replay, each replayed record inherits the `Sequence` from its corresponding original record.
-3. During diff, the engine builds a map (`map[int]model.Record`) from replay records keyed by sequence, then iterates over original records and looks up the matching replay record by sequence number. Missing replay records produce an error-level "replay record missing" difference.
+3. During diff, the engine builds a map (`map[int]model.Record`) from replay records keyed by sequence, then iterates over original records and looks up the matching replay record by sequence number. Missing replay records produce an error-level "replay record missing" difference, while replay records with `Error` populated produce a direct "replay failed: ..." difference.
 
 ### 3.5 Request Transformation
 

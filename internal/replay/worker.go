@@ -36,9 +36,11 @@ func NewWorkerPool(concurrency int, timeout time.Duration, retryCount int, trans
 
 // ReplayResult holds the result of a single replay
 type ReplayResult struct {
-	Original model.Record // original recorded record
-	Replayed model.Record // record obtained from replay
-	Error    error        // replay error
+	Original   model.Record // original recorded record
+	Replayed   model.Record // record obtained from replay
+	Error      error        // replay error
+	StartedAt  int64
+	FinishedAt int64
 }
 
 // Execute replays a batch of records concurrently
@@ -87,27 +89,39 @@ func (wp *WorkerPool) replayOne(original model.Record) ReplayResult {
 	result := ReplayResult{Original: original}
 
 	httpReq := Transform(original.Request, wp.transform)
+	startTime := time.Now()
+	result.StartedAt = startTime.UnixMilli()
 	if httpReq == nil {
 		result.Error = fmt.Errorf("failed to build request for record %s", original.ID)
+		result.FinishedAt = time.Now().UnixMilli()
+		result.Replayed = model.Record{
+			ID:          uuid.New().String()[:8],
+			Sequence:    original.Sequence,
+			Request:     original.Request,
+			SideEffects: []model.SideEffect{},
+			RecordedAt:  result.FinishedAt,
+			Error:       result.Error.Error(),
+		}
 		return result
 	}
 
-	startTime := time.Now()
 	resp, err := wp.client.Do(httpReq)
 	for attempt := 0; err != nil && attempt < wp.retryCount; attempt++ {
 		resp, err = wp.client.Do(Transform(original.Request, wp.transform))
 	}
 	duration := time.Since(startTime).Milliseconds()
+	result.FinishedAt = time.Now().UnixMilli()
 
 	if err != nil {
 		result.Error = fmt.Errorf("request failed: %w", err)
 		result.Replayed = model.Record{
-			ID:         uuid.New().String()[:8],
-			Sequence:   original.Sequence,
-			Request:    original.Request,
-			Duration:   duration,
-			RecordedAt: time.Now().UnixMilli(),
-			Error:      err.Error(),
+			ID:          uuid.New().String()[:8],
+			Sequence:    original.Sequence,
+			Request:     original.Request,
+			SideEffects: []model.SideEffect{},
+			Duration:    duration,
+			RecordedAt:  result.FinishedAt,
+			Error:       err.Error(),
 		}
 		return result
 	}
@@ -117,8 +131,23 @@ func (wp *WorkerPool) replayOne(original model.Record) ReplayResult {
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		result.Error = fmt.Errorf("read response body: %w", err)
+		result.FinishedAt = time.Now().UnixMilli()
+		result.Replayed = model.Record{
+			ID:       uuid.New().String()[:8],
+			Sequence: original.Sequence,
+			Request:  original.Request,
+			Response: model.HTTPResponse{
+				StatusCode: resp.StatusCode,
+				Headers:    cloneHTTPHeaders(resp.Header),
+			},
+			SideEffects: []model.SideEffect{},
+			Duration:    duration,
+			RecordedAt:  result.FinishedAt,
+			Error:       result.Error.Error(),
+		}
 		return result
 	}
+	result.FinishedAt = time.Now().UnixMilli()
 
 	result.Replayed = model.Record{
 		ID:       uuid.New().String()[:8],
@@ -132,7 +161,7 @@ func (wp *WorkerPool) replayOne(original model.Record) ReplayResult {
 		},
 		SideEffects: []model.SideEffect{},
 		Duration:    duration,
-		RecordedAt:  time.Now().UnixMilli(),
+		RecordedAt:  result.FinishedAt,
 	}
 
 	logger.ReplayEvent("request_replayed",

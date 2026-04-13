@@ -168,7 +168,11 @@ Replay recorded traffic against the new API:
 
 ```bash
 shadiff replay -s "migration-v1" -t http://new-api:9090 -c 5
+shadiff replay -s "migration-v1" -t http://new-api:9090 \
+  --db-proxy mysql://:13307->:3306
 ```
+
+When replay uses `--db-proxy`, DB side effects are captured into `replay-records.jsonl` and replay must stay serial (`--concurrency 1`).
 
 ### 3. Compare Results
 

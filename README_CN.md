@@ -168,7 +168,11 @@ shadiff record stop -s "long-run"
 
 ```bash
 shadiff replay -s "migration-v1" -t http://new-api:9090 -c 5
+shadiff replay -s "migration-v1" -t http://new-api:9090 \
+  --db-proxy mysql://:13307->:3306
 ```
+
+当 replay 启用 `--db-proxy` 时，DB side effect 会写入 `replay-records.jsonl`，并且回放必须保持串行（`--concurrency 1`）。
 
 ### 3. 对比结果
 

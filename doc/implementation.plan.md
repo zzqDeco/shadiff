@@ -40,7 +40,7 @@ This document maps every package, source file, and key implementation pattern in
 | `root.go` | Root cobra command (`shadiff`); defines global flags (`--config`, `--verbose`, `--quiet`) and initializes runtime config in `PersistentPreRunE` |
 | `version.go` | `shadiff version` command; prints build-time injected Version, Commit, BuildDate |
 | `runtime.go` | Shared runtime context for config path, loaded config, data directory, log directory, and flag-over-config precedence helpers |
-| `dbproxy.go` | Helper logic for `record` DB proxy parsing, config fallback, hook startup, and side-effect fan-in |
+| `dbproxy.go` | Helper logic for record/replay DB proxy parsing, config fallback for capture, hook startup, and side-effect fan-in |
 | `record.go` | `shadiff record` command; resolves config-backed capture settings, starts HTTP reverse proxy plus DB hooks, and supports `--daemon` mode via self-re-exec |
 | `record_stop.go` | `shadiff record stop` subcommand; stops a daemon recording session by sending signals (SIGTERM/os.Interrupt), with graceful wait and force kill fallback; includes `findSession()` helper for ID/name resolution |
 | `record_status.go` | `shadiff record status` subcommand; lists all active recording sessions or shows detailed status for a specific session including PID, process liveness, record count, and uptime |
@@ -62,7 +62,7 @@ This document maps every package, source file, and key implementation pattern in
 | File | Description |
 |------|-------------|
 | `proxy.go` | HTTP reverse proxy (`httputil.ReverseProxy` wrapper); captures request/response pairs with `responseRecorder`; assigns sequence numbers via `atomic.Int64` |
-| `recorder.go` | Unified recorder; receives `Record` objects from the proxy, attaches pending side effects from the channel, persists via `FileStore.AppendRecord()`; runs background goroutine to collect side effects |
+| `recorder.go` | Unified recorder; manages request scopes, attributes side effects from the channel by timestamp, persists via `FileStore.AppendRecord()`; runs background goroutine to collect side effects |
 | `recorder_test.go` | Tests for the Recorder |
 
 ### `internal/capture/dbhook/` -- Database Protocol Proxies
@@ -89,7 +89,7 @@ This document maps every package, source file, and key implementation pattern in
 
 | File | Description |
 |------|-------------|
-| `engine.go` | Core diff engine; loads recorded and replayed records, pairs by sequence number, compares status codes / headers / bodies / side effects; saves results via `DiffStore` |
+| `engine.go` | Core diff engine; loads recorded and replayed records, pairs by sequence number, reports replay failures, compares status codes / headers / bodies / SQL side effects / Mongo side effects; saves results via `DiffStore` |
 | `json.go` | `JSONDiffer` struct; recursive structural JSON comparison (objects, arrays, primitives); supports ordered and unordered array comparison with best-match pairing |
 | `rule_loader.go` | Converts config rules to diff rules and loads external rule files from JSON or YAML |
 | `rules.go` | `Rule`, `RuleSet`, `Matcher` interface; path-wildcard-to-regexp compilation; built-in matchers (Timestamp, UUID, NumericTolerance); `DefaultRules()`, `DefaultIgnoreHeaders()`, `FormatDiffSummary()`, `FormatPath()` |
@@ -122,7 +122,7 @@ This document maps every package, source file, and key implementation pattern in
 
 | File | Description |
 |------|-------------|
-| `engine.go` | Replay engine; reads recorded records from storage, creates a worker pool, executes replay, saves replay records to `replay-records.jsonl` |
+| `engine.go` | Replay engine; reads recorded records from storage, executes replay, optionally attributes replay DB side effects by request window, saves replay records to `replay-records.jsonl` |
 | `worker.go` | `WorkerPool` struct; concurrent replay with configurable worker count and inter-request delay; `replayOne()` sends a single HTTP request and captures the response as a new `Record` |
 | `transform.go` | `TransformConfig` and `Transform()` function; rewrites recorded requests for the replay target (URL, headers, proxy header removal) |
 | `transform_test.go` | Tests for request transformation |
