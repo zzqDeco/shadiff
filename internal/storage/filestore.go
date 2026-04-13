@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -193,6 +194,48 @@ func (fs *FileStore) AppendReplayRecord(sessionID string, record *model.Record) 
 	return fs.appendRecord(sessionID, "replay-records.jsonl", record)
 }
 
+// SaveRequestBodyArtifact persists the full captured request body for a record and returns
+// a session-relative artifact path suitable for model.HTTPRequest.BodyRef.
+func (fs *FileStore) SaveRequestBodyArtifact(sessionID, recordID string, src io.Reader) (string, error) {
+	fs.mu.Lock()
+	defer fs.mu.Unlock()
+
+	relPath := filepath.Join("artifacts", "request-bodies", recordID+".bin")
+	fullPath := filepath.Join(fs.baseDir, sessionID, relPath)
+	if err := os.MkdirAll(filepath.Dir(fullPath), 0o755); err != nil {
+		return "", fmt.Errorf("create request body artifact dir: %w", err)
+	}
+
+	f, err := os.Create(fullPath)
+	if err != nil {
+		return "", fmt.Errorf("create request body artifact: %w", err)
+	}
+	defer f.Close()
+
+	if _, err := io.Copy(f, src); err != nil {
+		return "", fmt.Errorf("write request body artifact: %w", err)
+	}
+
+	return filepath.ToSlash(relPath), nil
+}
+
+// OpenRequestBodyArtifact opens a previously stored request body artifact using its session-relative path.
+func (fs *FileStore) OpenRequestBodyArtifact(sessionID, ref string) (io.ReadCloser, error) {
+	fs.mu.RLock()
+	defer fs.mu.RUnlock()
+
+	fullPath, err := fs.requestBodyArtifactPath(sessionID, ref)
+	if err != nil {
+		return nil, err
+	}
+
+	f, err := os.Open(fullPath)
+	if err != nil {
+		return nil, fmt.Errorf("open request body artifact: %w", err)
+	}
+	return f, nil
+}
+
 func (fs *FileStore) appendRecord(sessionID, filename string, record *model.Record) error {
 	fs.mu.Lock()
 	defer fs.mu.Unlock()
@@ -341,6 +384,29 @@ func (fs *FileStore) saveSession(sess *model.Session) error {
 		return err
 	}
 	return os.WriteFile(path, data, 0644)
+}
+
+func (fs *FileStore) requestBodyArtifactPath(sessionID, ref string) (string, error) {
+	if ref == "" {
+		return "", fmt.Errorf("request body artifact path is empty")
+	}
+
+	clean := filepath.Clean(filepath.FromSlash(ref))
+	if clean == "." || clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("invalid request body artifact path: %s", ref)
+	}
+
+	fullPath := filepath.Join(fs.baseDir, sessionID, clean)
+	sessionRoot := filepath.Join(fs.baseDir, sessionID)
+	rel, err := filepath.Rel(sessionRoot, fullPath)
+	if err != nil {
+		return "", fmt.Errorf("resolve request body artifact path: %w", err)
+	}
+	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("invalid request body artifact path: %s", ref)
+	}
+
+	return fullPath, nil
 }
 
 func hasAnyTag(sessionTags, filterTags []string) bool {

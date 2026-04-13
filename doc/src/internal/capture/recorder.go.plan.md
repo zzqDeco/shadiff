@@ -31,6 +31,7 @@
   - `(*Recorder).BeginRequestScope(startedAt int64) int64` -- Opens a request attribution scope and returns its ID.
   - `(*Recorder).FinishRequestScope(scopeID int64, record *model.Record) error` -- Closes a request scope, flushes side effects through the collector, attaches the attributed effects to the record, and persists it.
   - `(*Recorder).Record(record *model.Record) error` -- Persists a standalone record without request-scope attribution.
+  - `(*Recorder).SaveRequestBodyArtifact(recordID string, src io.Reader) (string, error)` -- Persists a full request-body artifact inside the current session directory and returns its relative path.
   - `(*Recorder).SideEffectChan() chan<- model.SideEffect` -- Returns a send-only channel so external components (DB hooks) can submit side effects without direct coupling.
   - `(*Recorder).Count() int64` -- Returns the number of records persisted so far.
   - `(*Recorder).Stop()` -- Signals the background goroutine to stop, drains remaining side effects, and waits for collector shutdown.
@@ -49,6 +50,7 @@
   - `shadiff/internal/storage` -- `FileStore` for persisting records to disk.
 - External:
   - `fmt` -- Error wrapping.
+  - `io` -- Artifact streaming interface for stored request-body snapshots.
   - `sync` -- `Mutex`, `Once`, and `WaitGroup` for request-scope and shutdown coordination.
   - `sync/atomic` -- Lock-free record and scope counters.
 

@@ -17,7 +17,7 @@
 
 ## 4. Key Implementation Details
 - Structs/interfaces:
-  - `HTTPRequest` -- Fields: `Method` (HTTP method), `Path` (path without host), `Query` (raw query string), `Headers` (multi-value header map: `map[string][]string`), `Body` (raw bytes), `BodyLen` (body length for large body truncation scenarios).
+  - `HTTPRequest` -- Fields: `Method` (HTTP method), `Path` (path without host), `Query` (raw query string), `Headers` (multi-value header map: `map[string][]string`), `Body` (inline request-body preview), `BodyRef` (optional session-relative path to the full stored request-body artifact), `BodyLen` (body length for truncation scenarios).
   - `HTTPResponse` -- Fields: `StatusCode` (HTTP status code), `Headers` (multi-value header map), `Body` (raw bytes), `BodyLen` (body length).
 - Exported functions/methods: None. This file is purely type definitions.
 - Constants: None.
@@ -33,5 +33,6 @@
 
 ## 7. Maintenance Notes
 - `Body` is stored as `[]byte` and will be base64-encoded in JSON output; consumers must handle this encoding.
-- `BodyLen` exists separately from `len(Body)` to support truncation scenarios where the full body is not stored but its original length is preserved.
+- `BodyRef` is only populated when the inline preview is insufficient for faithful replay. It is a path relative to the session directory, not an absolute filesystem path.
+- `BodyLen` exists separately from `len(Body)` to support truncation scenarios where the full body is stored out-of-line while the record keeps only a preview.
 - `Path` is stored without the host portion; the host comes from `EndpointConfig.BaseURL` in the session.

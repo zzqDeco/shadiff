@@ -270,7 +270,8 @@ CLI flag > config.json > 内置默认值
 
 补充说明：
 
-- `capture.maxBodySize` 会截断录制下来的请求/响应 body，但会保留原始 `bodyLen`。
+- `capture.maxBodySize` 会截断录制下来的请求/响应 body 预览，但会保留原始 `bodyLen`。
+- 当请求 body 的内联预览被截断时，Shadiff 会在 session 目录下保存完整请求体，并在 replay 时自动优先使用该 artifact。
 - `capture.excludePaths` 会继续代理匹配路径，但不会录制这些 HTTP 请求。
 - `capture.dbProxies` 与 `--db-proxy` 使用同一格式。
 - `diff.rulesFile` 支持 JSON、YAML、YML。
@@ -290,6 +291,8 @@ CLI flag > config.json > 内置默认值
         ├── records.jsonl              # 录制的行为记录（JSONL 流式）
         ├── replay-records.jsonl       # 回放结果
         ├── diff-results.json          # 对拍结果
+        ├── artifacts/
+        │   └── request-bodies/        # 用于忠实 replay 的完整请求体 artifact
         ├── pidfile                    # 守护进程 PID 文件（仅守护模式）
         └── daemon.log                 # 守护进程日志输出（仅守护模式）
 ```

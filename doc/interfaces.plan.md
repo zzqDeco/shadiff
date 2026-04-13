@@ -95,7 +95,7 @@ shadiff replay -s "user-module-migration" -t http://localhost:9090 -c 5
 | `--delay` | | | No | Delay between requests (e.g. `100ms`) |
 | `--db-proxy` | | | No | DB proxy specification (repeatable); enables replay-time DB side-effect capture and requires `--concurrency 1` |
 
-**Behavior**: Resolves the session by ID or name, loads all recorded records, replays them against the target using a configurable worker pool, and saves replay records to `replay-records.jsonl`. When `--db-proxy` is set, replay also captures DB side effects into replay records using request-window attribution. Updates the session status to `replayed`.
+**Behavior**: Resolves the session by ID or name, loads all recorded records, replays them against the target using a configurable worker pool, and saves replay records to `replay-records.jsonl`. Replay prefers full request-body artifacts referenced by `HTTPRequest.BodyRef` when present, and falls back to inline `Request.Body` for historical sessions. When `--db-proxy` is set, replay also captures DB side effects into replay records using request-window attribution. Updates the session status to `replayed`.
 
 ---
 
@@ -245,6 +245,8 @@ type RecordStore interface {
 `FileStore` also provides two additional methods not in the interface:
 - `AppendReplayRecord(sessionID, record)` -- appends to `replay-records.jsonl`
 - `ListReplayRecords(sessionID)` -- reads from `replay-records.jsonl`
+- `SaveRequestBodyArtifact(sessionID, recordID, src)` -- writes the full request body to `artifacts/request-bodies/<recordID>.bin`
+- `OpenRequestBodyArtifact(sessionID, ref)` -- opens a stored request-body artifact by its session-relative path
 
 ---
 
@@ -384,6 +386,7 @@ session.json            -- Session metadata (JSON)
 records.jsonl           -- Recorded request/response pairs (JSONL, append-only)
 replay-records.jsonl    -- Replayed request/response pairs (JSONL, append-only)
 diff-results.json       -- Diff comparison results (JSON array)
+artifacts/request-bodies/<recordID>.bin -- Full request-body snapshots used when inline previews are truncated
 ```
 
 ### 3.2 Channels for Side Effects
@@ -414,7 +417,7 @@ Records use **JSONL** (JSON Lines) format for streaming append-only writes:
 
 - Each record is a single JSON object followed by a newline character (`\n`).
 - Writes are mutex-protected (`sync.RWMutex` in `FileStore`) and use `O_APPEND` for crash safety.
-- Reads use `bufio.Scanner` with a 10 MB per-line buffer limit.
+- Reads use `bufio.Scanner` with a 10 MB per-line buffer limit, so full request bodies that would exceed JSONL line limits are stored out-of-line as artifacts.
 - Corrupted lines (invalid JSON) are silently skipped during reads.
 
 Diff results use standard JSON (a single JSON array), since they are written once after the full comparison completes.

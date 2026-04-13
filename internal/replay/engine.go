@@ -49,7 +49,7 @@ func NewEngine(store *storage.FileStore, cfg EngineConfig) *Engine {
 	return &Engine{
 		store:        store,
 		sessionID:    cfg.SessionID,
-		pool:         NewWorkerPool(concurrency, timeout, cfg.RetryCount, transform),
+		pool:         NewWorkerPool(store, concurrency, timeout, cfg.RetryCount, transform),
 		delay:        cfg.Delay,
 		sideEffectCh: cfg.SideEffectCh,
 	}

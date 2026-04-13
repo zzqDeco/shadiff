@@ -25,15 +25,16 @@
 ## 4. Key Implementation Details
 - Structs/interfaces:
   - `Proxy` -- Main struct holding the parsed target URL, the stdlib `httputil.ReverseProxy`, a `*Recorder` reference, and an atomic sequence counter.
-  - `requestBodyCapture` -- An `io.ReadCloser` wrapper that streams request bytes to the upstream target while counting total body length and storing only the configured capture prefix.
+  - `requestBodyCapture` -- Internal request-body snapshot helper that captures the full request body, stores only the configured preview inline, and spills large payloads to a temporary file before optional artifact persistence.
   - `responseRecorder` -- An `http.ResponseWriter` wrapper that intercepts `WriteHeader` and `Write` calls to capture the response status code and body while still forwarding data to the real writer.
 - Exported functions/methods:
   - `NewProxy(targetURL string, recorder *Recorder, opts ProxyOptions) (*Proxy, error)` -- Parses the target URL and constructs a configured reverse proxy with capture options.
-  - `(*Proxy).ServeHTTP(w http.ResponseWriter, r *http.Request)` -- Implements `http.Handler`. Skips excluded paths early, opens a recorder request scope for included traffic, wraps request bodies with a streaming capture tap, proxies to the target, captures the response, builds a `model.Record`, and asks the recorder to close the scope and persist it.
+  - `(*Proxy).ServeHTTP(w http.ResponseWriter, r *http.Request)` -- Implements `http.Handler`. Skips excluded paths early, snapshots included request bodies before proxying, optionally persists a full request-body artifact, proxies to the target, captures the response, builds a `model.Record`, and asks the recorder to close the scope and persist it.
 - Key behaviors:
-  - Excluded paths are forwarded without request capture work.
-  - Included request bodies are captured via a streaming wrapper instead of an eager `io.ReadAll`.
+  - Excluded paths are forwarded without request capture or artifact work.
+  - Included request bodies are fully snapshotted before proxying so capture fidelity no longer depends on how much of the body the upstream target reads.
   - `Request.Body` stores only the configured prefix while `Request.BodyLen` keeps the full observed body size.
+  - When the inline preview is truncated, the full request body is stored as a session artifact and referenced by `Request.BodyRef`.
   - Included requests open a recorder request scope before proxying and close it after response capture so DB side effects can be attached by timestamp.
   - Each request gets a monotonically increasing sequence number via `atomic.Int64`.
   - Record IDs are the first 8 characters of a UUID v4.
@@ -58,10 +59,10 @@
 - `internal/capture/recorder.go` -- `Proxy` calls `Recorder.BeginRequestScope()` / `FinishRequestScope()` directly; changes to the recorder scope API require updates here.
 - `internal/model/` -- Any changes to `HTTPRequest`, `HTTPResponse`, or `Record` fields affect the record-building logic in `ServeHTTP`.
 - Any code that instantiates `NewProxy` (typically the CLI or server setup) is affected if the constructor signature changes.
-- `requestBodyCapture` and `responseRecorder` are unexported and self-contained; changes are localized unless the capture semantics change.
+- `requestBodyCapture` and `responseRecorder` are unexported and self-contained; changes are localized unless the capture semantics or artifact lifecycle change.
 
 ## 7. Maintenance Notes
-- Request-body capture is intentionally streaming; preserve this property when changing proxy behavior so excluded or large requests do not regress to eager buffering.
+- Request-body capture now prioritizes replay fidelity over fully streaming uploads. Preserve the current spill-to-temp-file behavior so large bodies do not become memory-only again.
 - The `responseRecorder` does not capture trailers; if HTTP trailer support is needed, `Write` and `Flush` should be extended.
 - The `cloneHeaders` function is a simple deep copy; it does not handle canonical header casing differences beyond what Go's `http.Header` already provides.
 - The UUID truncation to 8 characters is sufficient for short-lived capture sessions but may collide at scale; consider using full UUIDs if sessions become very large.

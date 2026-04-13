@@ -1,6 +1,8 @@
 package storage
 
 import (
+	"bytes"
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
@@ -409,6 +411,49 @@ func TestGetRecord_NotFound(t *testing.T) {
 	_, err := fs.GetRecord(sess.ID, "nonexistent")
 	if err == nil {
 		t.Fatal("expected error for non-existent record, got nil")
+	}
+}
+
+func TestSaveAndOpenRequestBodyArtifact(t *testing.T) {
+	fs := newTestStore(t)
+	sess := makeSession("artifact-session", model.SessionRecording)
+	if err := fs.Create(sess); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	body := []byte("full request body payload")
+	ref, err := fs.SaveRequestBodyArtifact(sess.ID, "rec-body", bytes.NewReader(body))
+	if err != nil {
+		t.Fatalf("SaveRequestBodyArtifact: %v", err)
+	}
+	if ref != "artifacts/request-bodies/rec-body.bin" {
+		t.Fatalf("ref = %q, want %q", ref, "artifacts/request-bodies/rec-body.bin")
+	}
+
+	reader, err := fs.OpenRequestBodyArtifact(sess.ID, ref)
+	if err != nil {
+		t.Fatalf("OpenRequestBodyArtifact: %v", err)
+	}
+	defer reader.Close()
+
+	got, err := io.ReadAll(reader)
+	if err != nil {
+		t.Fatalf("ReadAll: %v", err)
+	}
+	if !bytes.Equal(got, body) {
+		t.Fatalf("body = %q, want %q", string(got), string(body))
+	}
+}
+
+func TestOpenRequestBodyArtifact_RejectsPathTraversal(t *testing.T) {
+	fs := newTestStore(t)
+	sess := makeSession("artifact-session", model.SessionRecording)
+	if err := fs.Create(sess); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	if _, err := fs.OpenRequestBodyArtifact(sess.ID, "../outside.bin"); err == nil {
+		t.Fatal("expected path traversal to fail")
 	}
 }
 
