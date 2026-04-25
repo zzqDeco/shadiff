@@ -189,7 +189,15 @@ shadiff diff -s "migration-v1" -r rules.yaml --ignore-order
 
 # JSON output for scripts/CI
 shadiff diff -s "migration-v1" -o json
+
+# Write CI JSON to a file
+shadiff diff -s "migration-v1" -o json --output-file diff.json
+
+# Fail CI when unignored differences are found
+shadiff diff -s "migration-v1" --fail-on diff
 ```
+
+`--fail-on` accepts `none` (default), `diff`, or `error`. Use `diff` to fail on any unignored difference, or `error` to fail only when unignored error-severity differences exist.
 
 ### 4. Generate Report
 

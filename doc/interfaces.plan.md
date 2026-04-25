@@ -106,6 +106,7 @@ Compare behavioral differences between recorded and replayed traffic.
 ```
 shadiff diff -s abc123
 shadiff diff -s "user-module-migration" --ignore-order -r rules.yaml
+shadiff diff -s abc123 -o json --output-file diff.json --fail-on diff
 ```
 
 | Flag | Short | Default | Required | Description |
@@ -115,8 +116,10 @@ shadiff diff -s "user-module-migration" --ignore-order -r rules.yaml
 | `--ignore-order` | | `false` | No | Ignore JSON array element order |
 | `--ignore-headers` | | | No | Additional headers to ignore (repeatable) |
 | `--output` | `-o` | `terminal` | No | Output format: `terminal`, `json` |
+| `--output-file` | | | No | Write selected diff output format to a file instead of stdout |
+| `--fail-on` | | `none` | No | Failure policy: `none`, `diff`, or `error` |
 
-**Behavior**: Loads recorded and replayed records, pairs them by sequence number, reports replay failures explicitly, and compares status codes, response headers, JSON response bodies (structural diff), SQL side effects, and MongoDB side effects. Applies built-in and user-defined rules to mark expected differences as ignored. Saves results to `diff-results.json` and then renders either terminal output or JSON output based on `--output`.
+**Behavior**: Loads recorded and replayed records, pairs them by sequence number, reports replay failures explicitly, and compares status codes, response headers, JSON response bodies (structural diff), SQL side effects, and MongoDB side effects. Applies built-in and user-defined rules to mark expected differences as ignored. Saves results to `diff-results.json` and then renders either terminal output or JSON output based on `--output`. When `--output-file` is set, the selected output is written to that file and stdout receives a confirmation line. `--fail-on none` preserves compatibility and exits successfully after a completed diff, `--fail-on diff` returns a command error when any record has unignored differences, and `--fail-on error` returns a command error only when unignored error-severity differences exist.
 
 ---
 

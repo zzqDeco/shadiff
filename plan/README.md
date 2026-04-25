@@ -18,7 +18,7 @@
 | `plan/dbhook-flush-drain-race.plan.md` | Fix DB hook group flush drain synchronization so forwarded side effects reach the shared sink before flush returns | Completed |
 | `plan/replay-db-sideeffects.plan.md` | Close the DB side-effect replay and diff loop for MySQL, PostgreSQL, and MongoDB | In Progress |
 | `plan/request-scoped-sideeffect-attribution.plan.md` | Replace next-record side-effect attachment with request-scoped attribution | Completed |
-| `plan/diff-ci-output.plan.md` | Make `shadiff diff` produce stable machine-readable output and CI-friendly exit codes | In Progress |
+| `plan/diff-ci-output.plan.md` | Make `shadiff diff` produce stable machine-readable output and CI-friendly exit codes | Completed |
 
 ## Phase History
 

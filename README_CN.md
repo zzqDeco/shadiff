@@ -189,7 +189,15 @@ shadiff diff -s "migration-v1" -r rules.yaml --ignore-order
 
 # 面向脚本/CI 的 JSON 输出
 shadiff diff -s "migration-v1" -o json
+
+# 将 CI JSON 写入文件
+shadiff diff -s "migration-v1" -o json --output-file diff.json
+
+# 存在未忽略差异时让 CI 失败
+shadiff diff -s "migration-v1" --fail-on diff
 ```
+
+`--fail-on` 支持 `none`（默认）、`diff`、`error`。使用 `diff` 可在存在任意未忽略差异时失败；使用 `error` 只在存在未忽略的 error 级差异时失败。
 
 ### 4. 生成报告
 
