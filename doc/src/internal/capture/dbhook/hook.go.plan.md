@@ -29,7 +29,7 @@
     - `SideEffects() <-chan model.SideEffect` -- Return a receive-only channel of captured side effects.
     - `Type() string` -- Return the database type identifier.
   - `Group` -- Coordinates multiple hooks plus their side-effect forwarders; exposes `Flush(ctx)` to wait for hook parsing and sink delivery, and `Stop()` for grouped shutdown.
-  - `sideEffectForwarder` -- Internal helper that forwards one hook's side-effect channel into a shared sink and supports drain detection.
+  - `sideEffectForwarder` -- Internal helper that forwards one hook's side-effect channel into a shared sink and supports drain detection through a barrier acknowledgement channel.
   - `Config` -- Configuration struct with fields `DBType`, `ListenAddr`, and `TargetAddr`.
   - `UnsupportedDBError` -- Custom error type for unrecognized database types; implements the `error` interface.
 - Exported functions/methods:
@@ -39,6 +39,7 @@
   - The factory pattern centralizes hook creation, making it easy to add new database types by adding a case to the switch statement.
   - The `DBHook` interface decouples the capture pipeline from database-specific protocol parsing logic.
   - `Group.Flush(ctx)` first calls `Flush(ctx)` on every hook, then waits until forwarded side effects have reached the shared sink channel.
+  - Forwarder drain uses a barrier handshake rather than only checking channel length. `WaitDrained(ctx)` sends a barrier through the forwarder goroutine and waits for the acknowledgement, preventing an early return when a side effect has already been consumed from the source channel but has not yet been delivered to the sink.
 
 ## 5. Dependencies
 - Internal:
@@ -56,3 +57,4 @@
 - To add support for a new database (e.g., Redis, SQLite), add a new case to the `NewHook` switch and implement the full `DBHook` interface, including `Flush(ctx)`, in a new file.
 - The `Config` struct is minimal. If database-specific configuration is needed (e.g., TLS settings, authentication), consider embedding database-specific config sub-structs or using a map of options.
 - The `UnsupportedDBError` type enables callers to use `errors.As` for typed error handling if needed.
+- Keep `sideEffectForwarder.WaitDrained()` synchronized through the barrier channel. Replacing it with only `len(source)` / `inFlight` checks can reintroduce a race where `Group.Flush()` returns before sink delivery completes.

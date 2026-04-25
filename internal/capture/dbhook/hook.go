@@ -40,14 +40,16 @@ type sideEffectForwarder struct {
 	source   <-chan model.SideEffect
 	sink     chan<- model.SideEffect
 	done     chan struct{}
+	barrier  chan chan struct{}
 	inFlight atomic.Int64
 }
 
 func newSideEffectForwarder(ctx context.Context, source <-chan model.SideEffect, sink chan<- model.SideEffect) *sideEffectForwarder {
 	f := &sideEffectForwarder{
-		source: source,
-		sink:   sink,
-		done:   make(chan struct{}),
+		source:  source,
+		sink:    sink,
+		done:    make(chan struct{}),
+		barrier: make(chan chan struct{}),
 	}
 
 	go func() {
@@ -66,6 +68,8 @@ func newSideEffectForwarder(ctx context.Context, source <-chan model.SideEffect,
 					return
 				}
 				f.inFlight.Add(-1)
+			case ack := <-f.barrier:
+				close(ack)
 			case <-ctx.Done():
 				return
 			}
@@ -81,7 +85,12 @@ func (f *sideEffectForwarder) WaitDrained(ctx context.Context) error {
 
 	for {
 		if len(f.source) == 0 && f.inFlight.Load() == 0 {
-			return nil
+			if err := f.waitBarrier(ctx); err != nil {
+				return err
+			}
+			if len(f.source) == 0 && f.inFlight.Load() == 0 {
+				return nil
+			}
 		}
 
 		select {
@@ -93,6 +102,31 @@ func (f *sideEffectForwarder) WaitDrained(ctx context.Context) error {
 				return nil
 			}
 		}
+	}
+}
+
+func (f *sideEffectForwarder) waitBarrier(ctx context.Context) error {
+	ack := make(chan struct{})
+	select {
+	case f.barrier <- ack:
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-f.done:
+		if f.inFlight.Load() == 0 {
+			return nil
+		}
+	}
+
+	select {
+	case <-ack:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-f.done:
+		if f.inFlight.Load() == 0 {
+			return nil
+		}
+		return nil
 	}
 }
 

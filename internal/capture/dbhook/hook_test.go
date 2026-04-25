@@ -141,6 +141,34 @@ func TestGroupFlush_WaitsForAllHooksAndForwarders(t *testing.T) {
 	}
 }
 
+func TestSideEffectForwarderWaitDrained_BlocksUntilSinkDelivery(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	source := make(chan model.SideEffect, 1)
+	sink := make(chan model.SideEffect)
+	forwarder := newSideEffectForwarder(ctx, source, sink)
+
+	source <- model.SideEffect{Type: model.SideEffectDB, DBType: "mysql", Query: "SELECT blocked"}
+
+	deadline := time.After(100 * time.Millisecond)
+	for len(source) != 0 {
+		select {
+		case <-deadline:
+			t.Fatal("forwarder did not consume source side effect")
+		default:
+			time.Sleep(time.Millisecond)
+		}
+	}
+
+	drainCtx, drainCancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer drainCancel()
+
+	if err := forwarder.WaitDrained(drainCtx); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("WaitDrained() error = %v, want context deadline exceeded", err)
+	}
+}
+
 func TestGroupFlush_RespectsContextTimeout(t *testing.T) {
 	hook := &fakeHook{
 		sideEffects: make(chan model.SideEffect, 1),
