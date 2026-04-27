@@ -38,7 +38,7 @@ shadiff record -t http://old-api:8080 --db-proxy mysql://:13306->:3306
 | `--duration` | `-d` | | No | Maximum recording duration (e.g. `30m`) |
 | `--daemon` | `-D` | `false` | No | Run as background daemon |
 
-**Behavior**: Creates a session, starts an HTTP reverse proxy from `--listen` to `--target`, captures every request/response pair as a `Record`, and persists them via JSONL streaming. Stops on SIGINT/SIGTERM or when `--duration` expires. On shutdown, updates the session status to `completed` with the final record count.
+**Behavior**: Creates a session, starts an HTTP reverse proxy from `--listen` to `--target`, captures every request/response pair as a `Record`, and persists them via JSONL streaming. When DB proxies are configured, the proxy flushes hook-delivered side effects before each request scope closes so in-window effects can still be attributed. Stops on SIGINT/SIGTERM or when `--duration` expires. On shutdown, updates the session status to `completed` with the final record count.
 
 In daemon mode (`-D`), the parent process creates the session, re-execs the binary as a detached child, writes the PID file, and exits immediately. The child runs the proxy in the background with output redirected to `daemon.log`.
 
@@ -95,7 +95,7 @@ shadiff replay -s "user-module-migration" -t http://localhost:9090 -c 5
 | `--delay` | | | No | Delay between requests (e.g. `100ms`) |
 | `--db-proxy` | | | No | DB proxy specification (repeatable); enables replay-time DB side-effect capture and requires `--concurrency 1` |
 
-**Behavior**: Resolves the session by ID or name, loads all recorded records, replays them against the target using a configurable worker pool, and saves replay records to `replay-records.jsonl`. When `--db-proxy` is set, replay also captures DB side effects into replay records using request-window attribution. Updates the session status to `replayed`.
+**Behavior**: Resolves the session by ID or name, loads all recorded records, replays them against the target using a configurable worker pool, and saves replay records to `replay-records.jsonl`. Replay prefers full request-body artifacts referenced by `HTTPRequest.BodyRef` when present, and falls back to inline `Request.Body` for historical sessions. When `--db-proxy` is set, replay also captures DB side effects into replay records using request-window attribution and flushes hook-delivered telemetry before each replay window is finalized. Updates the session status to `replayed`.
 
 ---
 
@@ -106,6 +106,7 @@ Compare behavioral differences between recorded and replayed traffic.
 ```
 shadiff diff -s abc123
 shadiff diff -s "user-module-migration" --ignore-order -r rules.yaml
+shadiff diff -s abc123 -o json --output-file diff.json --fail-on diff
 ```
 
 | Flag | Short | Default | Required | Description |
@@ -115,8 +116,10 @@ shadiff diff -s "user-module-migration" --ignore-order -r rules.yaml
 | `--ignore-order` | | `false` | No | Ignore JSON array element order |
 | `--ignore-headers` | | | No | Additional headers to ignore (repeatable) |
 | `--output` | `-o` | `terminal` | No | Output format: `terminal`, `json` |
+| `--output-file` | | | No | Write selected diff output format to a file instead of stdout |
+| `--fail-on` | | `none` | No | Failure policy: `none`, `diff`, or `error` |
 
-**Behavior**: Loads recorded and replayed records, pairs them by sequence number, reports replay failures explicitly, and compares status codes, response headers, JSON response bodies (structural diff), SQL side effects, and MongoDB side effects. Applies built-in and user-defined rules to mark expected differences as ignored. Saves results to `diff-results.json` and then renders either terminal output or JSON output based on `--output`.
+**Behavior**: Loads recorded and replayed records, pairs them by sequence number, reports replay failures explicitly, and compares status codes, response headers, JSON response bodies (structural diff), SQL side effects, and MongoDB side effects. Applies built-in and user-defined rules to mark expected differences as ignored. Saves results to `diff-results.json` and then renders either terminal output or JSON output based on `--output`. When `--output-file` is set, the selected output is written to that file and stdout receives a confirmation line. `--fail-on none` preserves compatibility and exits successfully after a completed diff, `--fail-on diff` returns a command error when any record has unignored differences, and `--fail-on error` returns a command error only when unignored error-severity differences exist.
 
 ---
 
@@ -245,6 +248,8 @@ type RecordStore interface {
 `FileStore` also provides two additional methods not in the interface:
 - `AppendReplayRecord(sessionID, record)` -- appends to `replay-records.jsonl`
 - `ListReplayRecords(sessionID)` -- reads from `replay-records.jsonl`
+- `SaveRequestBodyArtifact(sessionID, recordID, src)` -- writes the full request body to `artifacts/request-bodies/<recordID>.bin`
+- `OpenRequestBodyArtifact(sessionID, ref)` -- opens a stored request-body artifact by its session-relative path
 
 ---
 
@@ -281,6 +286,7 @@ Captures database operations by acting as a transparent TCP proxy that sniffs th
 ```go
 type DBHook interface {
     Start(ctx context.Context) error
+    Flush(ctx context.Context) error
     Stop() error
     SideEffects() <-chan model.SideEffect
     Type() string
@@ -290,6 +296,7 @@ type DBHook interface {
 | Method | Description |
 |--------|-------------|
 | `Start` | Begins listening on the proxy address and accepting connections; sniffs protocol traffic in background goroutines |
+| `Flush` | Blocks until traffic already observed by the hook has been parsed and pushed toward the shared side-effect sink |
 | `Stop` | Closes the listener, waits for all connection goroutines to finish, closes the side-effect channel |
 | `SideEffects` | Returns a read-only channel (buffered, capacity 1000) that emits captured `model.SideEffect` values |
 | `Type` | Returns the database type identifier string |
@@ -303,6 +310,8 @@ type DBHook interface {
 | `MongoHook` | `"mongo"` | `mongo.go` | Parses MongoDB OP_MSG wire protocol (opcode 2013); extracts CRUD commands (find, insert, update, delete, aggregate, count, distinct, findAndModify) via simplified BSON parsing |
 
 **Factory**: `NewHook(cfg Config) (DBHook, error)` dispatches on `cfg.DBType`.
+
+**Coordinator**: `dbhook.Group` fans multiple hook channels into a shared sink, exposes `Flush(ctx)` to wait for hook parsing plus forwarder drain, and exposes `Stop()` for grouped shutdown.
 
 ---
 
@@ -384,6 +393,7 @@ session.json            -- Session metadata (JSON)
 records.jsonl           -- Recorded request/response pairs (JSONL, append-only)
 replay-records.jsonl    -- Replayed request/response pairs (JSONL, append-only)
 diff-results.json       -- Diff comparison results (JSON array)
+artifacts/request-bodies/<recordID>.bin -- Full request-body snapshots used when inline previews are truncated
 ```
 
 ### 3.2 Channels for Side Effects
@@ -391,22 +401,19 @@ diff-results.json       -- Diff comparison results (JSON array)
 Database side effects flow through Go channels, not through the filesystem directly:
 
 ```
-DBHook.SideEffects()  -->  chan model.SideEffect (buffered, cap 1000)
-                                     |
-                                     v
-                           Recorder.sideEffectCh  (background goroutine attributes into request scopes)
-                                     |
-                                     v
-                   Recorder.FinishRequestScope()  (attaches scope effects to the current Record)
-                                     |
-                                     v
-                           FileStore.AppendRecord()  (serialized into records.jsonl)
+DBHook.SideEffects()  -->  dbhook.Group  -->  Recorder.sideEffectCh / replay sideEffectCh
+                                 |                        |
+                                 |                        v
+                                 |             request/window attribution
+                                 v
+                       Group.Flush(ctx) barrier
 ```
 
 1. Each `DBHook` implementation (MySQL, PostgreSQL, MongoDB) emits `model.SideEffect` values on a buffered channel (capacity 1000). If the channel is full, the side effect is dropped with a warning log.
-2. The `Recorder` runs a background goroutine (`collectSideEffects`) that drains the channel and attributes each effect to the best matching request scope (mutex-protected).
-3. When `Recorder.FinishRequestScope()` is called (triggered by the HTTP proxy after each request/response round-trip), it flushes collector backlog, attaches only the effects attributed to that request scope, then appends the complete record to storage.
-4. On `Recorder.Stop()`, the background goroutine drains any remaining channel items before exiting.
+2. `dbhook.Group` fans those events into a shared sink and exposes `Flush(ctx)` so capture/replay can wait for already-observed traffic to reach that sink before they close a request scope or replay window.
+3. The `Recorder` runs a background goroutine (`collectSideEffects`) that drains the capture sink and attributes each effect to the best matching request scope (mutex-protected).
+4. When `Recorder.FinishRequestScope()` is called (triggered by the HTTP proxy after each request/response round-trip), it drains collector backlog, attaches only the effects attributed to that request scope, then appends the complete record to storage.
+5. Replay uses the same flush-before-window-close pattern, but stores attributed effects in replay records instead of original capture records.
 
 ### 3.3 JSONL for Persistence
 
@@ -414,7 +421,7 @@ Records use **JSONL** (JSON Lines) format for streaming append-only writes:
 
 - Each record is a single JSON object followed by a newline character (`\n`).
 - Writes are mutex-protected (`sync.RWMutex` in `FileStore`) and use `O_APPEND` for crash safety.
-- Reads use `bufio.Scanner` with a 10 MB per-line buffer limit.
+- Reads use `bufio.Scanner` with a 10 MB per-line buffer limit, so full request bodies that would exceed JSONL line limits are stored out-of-line as artifacts.
 - Corrupted lines (invalid JSON) are silently skipped during reads.
 
 Diff results use standard JSON (a single JSON array), since they are written once after the full comparison completes.

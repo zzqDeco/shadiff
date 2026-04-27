@@ -24,12 +24,13 @@
 
 ## 4. Key Implementation Details
 - Structs/interfaces:
-  - `MongoHook` -- Implements `DBHook`. Holds listen/target addresses, a `net.Listener`, a buffered side-effects channel (capacity 1000), a `done` channel for shutdown, and a `sync.WaitGroup` for goroutine lifecycle management.
+  - `MongoHook` -- Implements `DBHook`. Holds listen/target addresses, a `net.Listener`, a buffered side-effects channel (capacity 1000), a `done` channel for shutdown, a `sync.WaitGroup`, and a mutex-protected set of active sniffed connections for flush barriers.
 - Exported functions/methods:
   - `NewMongoHook(listenAddr, targetAddr string) *MongoHook` -- Constructor.
   - `(*MongoHook).Type() string` -- Returns `"mongo"`.
   - `(*MongoHook).SideEffects() <-chan model.SideEffect` -- Returns the read-only side-effects channel.
   - `(*MongoHook).Start(ctx context.Context) error` -- Opens a TCP listener and spawns an accept loop goroutine.
+  - `(*MongoHook).Flush(ctx context.Context) error` -- Injects a barrier into each active sniff loop and waits for already-observed OP_MSG payloads to be parsed.
   - `(*MongoHook).Stop() error` -- Signals shutdown, closes the listener, waits for all goroutines, and closes the side-effects channel.
   - `MongoCommandToJSON(effect model.SideEffect) string` -- Converts a MongoDB side effect into a human-readable JSON string containing operation, collection, database, filter, update, and documents fields.
 - Unexported helpers:
@@ -38,6 +39,7 @@
   - `opMsgOpCode` (2013) -- MongoDB OP_MSG opcode.
 - Key behaviors:
   - Unlike the MySQL and PostgreSQL hooks which do streaming `Read` calls, the MongoDB hook uses `io.ReadFull` to read the 16-byte wire protocol header first, then reads the exact remaining body based on the message length. This provides proper message framing.
+  - Active sniffed connections are tracked so `Flush(ctx)` can ask each loop to enter `flushConn(...)`, which continues framed reads until a short idle window expires.
   - Message length is validated against a 16MB upper bound to prevent memory exhaustion from malformed messages. Invalid lengths cause a fallback to `io.Copy` passthrough.
   - `parseOpMsg` processes the OP_MSG body by iterating over sections. Section kind 0 (body) contains a single BSON document that is parsed for command extraction. Section kind 1 (document sequence) is skipped.
   - `extractMongoCommand` identifies CRUD operations by checking for known command keys: `find`, `insert`, `update`, `delete`, `aggregate`, `count`, `distinct`, `findAndModify`. The corresponding value is treated as the collection name.

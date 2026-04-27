@@ -1,6 +1,7 @@
 package capture
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -11,6 +12,17 @@ import (
 	"shadiff/internal/model"
 	"shadiff/internal/storage"
 )
+
+type fakeFlusher struct {
+	flush func(context.Context) error
+}
+
+func (f fakeFlusher) Flush(ctx context.Context) error {
+	if f.flush == nil {
+		return nil
+	}
+	return f.flush(ctx)
+}
 
 func newProxyTestStore(t *testing.T) (*storage.FileStore, *model.Session) {
 	t.Helper()
@@ -68,6 +80,21 @@ func TestProxy_TruncatesBodies(t *testing.T) {
 	if record.Request.BodyLen != 6 {
 		t.Fatalf("request bodyLen = %d, want %d", record.Request.BodyLen, 6)
 	}
+	if record.Request.BodyRef == "" {
+		t.Fatal("expected request body artifact ref for truncated request body")
+	}
+	reader, err := store.OpenRequestBodyArtifact(session.ID, record.Request.BodyRef)
+	if err != nil {
+		t.Fatalf("OpenRequestBodyArtifact() error: %v", err)
+	}
+	fullBody, err := io.ReadAll(reader)
+	_ = reader.Close()
+	if err != nil {
+		t.Fatalf("ReadAll() error: %v", err)
+	}
+	if string(fullBody) != "123456" {
+		t.Fatalf("artifact body = %q, want %q", string(fullBody), "123456")
+	}
 	if upstreamBody != "123456" {
 		t.Fatalf("upstream body = %q, want %q", upstreamBody, "123456")
 	}
@@ -119,6 +146,21 @@ func TestProxy_LargeRequestBodyIsFullyForwarded(t *testing.T) {
 	if records[0].Request.BodyLen != int64(len(requestBody)) {
 		t.Fatalf("request bodyLen = %d, want %d", records[0].Request.BodyLen, len(requestBody))
 	}
+	if records[0].Request.BodyRef == "" {
+		t.Fatal("expected request body artifact ref for large request body")
+	}
+	reader, err := store.OpenRequestBodyArtifact(session.ID, records[0].Request.BodyRef)
+	if err != nil {
+		t.Fatalf("OpenRequestBodyArtifact() error: %v", err)
+	}
+	fullBody, err := io.ReadAll(reader)
+	_ = reader.Close()
+	if err != nil {
+		t.Fatalf("ReadAll() error: %v", err)
+	}
+	if string(fullBody) != requestBody {
+		t.Fatalf("artifact body = %q, want %q", string(fullBody), requestBody)
+	}
 }
 
 func TestProxy_ExcludePathSkipsRecording(t *testing.T) {
@@ -154,6 +196,57 @@ func TestProxy_ExcludePathSkipsRecording(t *testing.T) {
 	}
 	if upstreamBody != requestBody {
 		t.Fatalf("upstream body = %q, want %q", upstreamBody, requestBody)
+	}
+}
+
+func TestProxy_CapturesFullRequestBodyEvenIfUpstreamDoesNotReadIt(t *testing.T) {
+	const requestBody = "request-body-captured-before-upstream-read"
+
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+	}))
+	defer target.Close()
+
+	store, session := newProxyTestStore(t)
+	recorder := NewRecorder(session.ID, store)
+	defer recorder.Stop()
+
+	proxy, err := NewProxy(target.URL, recorder, ProxyOptions{MaxBodySize: 7})
+	if err != nil {
+		t.Fatalf("NewProxy() error: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "http://proxy.local/api/login", strings.NewReader(requestBody))
+	resp := httptest.NewRecorder()
+	proxy.ServeHTTP(resp, req)
+
+	records, err := store.ListRecords(session.ID)
+	if err != nil {
+		t.Fatalf("ListRecords() error: %v", err)
+	}
+	if len(records) != 1 {
+		t.Fatalf("expected 1 record, got %d", len(records))
+	}
+	if got := string(records[0].Request.Body); got != requestBody[:7] {
+		t.Fatalf("request body = %q, want %q", got, requestBody[:7])
+	}
+	if records[0].Request.BodyLen != int64(len(requestBody)) {
+		t.Fatalf("request bodyLen = %d, want %d", records[0].Request.BodyLen, len(requestBody))
+	}
+	if records[0].Request.BodyRef == "" {
+		t.Fatal("expected request body artifact ref")
+	}
+	reader, err := store.OpenRequestBodyArtifact(session.ID, records[0].Request.BodyRef)
+	if err != nil {
+		t.Fatalf("OpenRequestBodyArtifact() error: %v", err)
+	}
+	fullBody, err := io.ReadAll(reader)
+	_ = reader.Close()
+	if err != nil {
+		t.Fatalf("ReadAll() error: %v", err)
+	}
+	if string(fullBody) != requestBody {
+		t.Fatalf("artifact body = %q, want %q", string(fullBody), requestBody)
 	}
 }
 
@@ -199,5 +292,84 @@ func TestProxy_ExcludedPathsDoNotInheritUnrelatedSideEffects(t *testing.T) {
 	}
 	if len(records[0].SideEffects) != 0 {
 		t.Fatalf("sideEffects len = %d, want 0", len(records[0].SideEffects))
+	}
+}
+
+func TestProxy_FlushesSideEffectsBeforeClosingScope(t *testing.T) {
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer target.Close()
+
+	store, session := newProxyTestStore(t)
+	recorder := NewRecorder(session.ID, store)
+	defer recorder.Stop()
+
+	proxy, err := NewProxy(target.URL, recorder, ProxyOptions{
+		Flusher: fakeFlusher{flush: func(ctx context.Context) error {
+			recorder.SideEffectChan() <- model.SideEffect{
+				Type:      model.SideEffectDB,
+				DBType:    "mysql",
+				Query:     "SELECT delayed",
+				Timestamp: time.Now().UnixMilli(),
+			}
+			return nil
+		}},
+		FlushTimeout: 50 * time.Millisecond,
+	})
+	if err != nil {
+		t.Fatalf("NewProxy() error: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "http://proxy.local/api", nil)
+	resp := httptest.NewRecorder()
+	proxy.ServeHTTP(resp, req)
+
+	records, err := store.ListRecords(session.ID)
+	if err != nil {
+		t.Fatalf("ListRecords() error: %v", err)
+	}
+	if len(records) != 1 {
+		t.Fatalf("records len = %d, want 1", len(records))
+	}
+	if len(records[0].SideEffects) != 1 {
+		t.Fatalf("sideEffects len = %d, want 1", len(records[0].SideEffects))
+	}
+	if records[0].SideEffects[0].Query != "SELECT delayed" {
+		t.Fatalf("side effect query = %q, want %q", records[0].SideEffects[0].Query, "SELECT delayed")
+	}
+}
+
+func TestProxy_FlushTimeoutDoesNotPreventRecording(t *testing.T) {
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer target.Close()
+
+	store, session := newProxyTestStore(t)
+	recorder := NewRecorder(session.ID, store)
+	defer recorder.Stop()
+
+	proxy, err := NewProxy(target.URL, recorder, ProxyOptions{
+		Flusher: fakeFlusher{flush: func(ctx context.Context) error {
+			<-ctx.Done()
+			return ctx.Err()
+		}},
+		FlushTimeout: time.Millisecond,
+	})
+	if err != nil {
+		t.Fatalf("NewProxy() error: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "http://proxy.local/api", nil)
+	resp := httptest.NewRecorder()
+	proxy.ServeHTTP(resp, req)
+
+	records, err := store.ListRecords(session.ID)
+	if err != nil {
+		t.Fatalf("ListRecords() error: %v", err)
+	}
+	if len(records) != 1 {
+		t.Fatalf("records len = %d, want 1", len(records))
 	}
 }

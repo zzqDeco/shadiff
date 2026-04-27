@@ -24,20 +24,21 @@
 
 ## 4. Key Implementation Details
 - Structs/interfaces:
-  - `Recorder` -- Main struct containing the session ID, file store reference, atomic record counter, a request-scope ID counter, a buffered side-effect channel (`chan model.SideEffect`, capacity 1000), a flush barrier channel, a mutex-protected `activeScopes` map, and shutdown coordination primitives.
+  - `Recorder` -- Main struct containing the session ID, file store reference, atomic record counter, a request-scope ID counter, a buffered side-effect channel (`chan model.SideEffect`, capacity 1000), a collector flush barrier channel, a mutex-protected `activeScopes` map, and shutdown coordination primitives.
   - `requestScope` -- Internal struct that tracks a request's open/close timestamps and the side effects attributed to that request.
 - Exported functions/methods:
   - `NewRecorder(sessionID string, store *storage.FileStore) *Recorder` -- Creates a recorder and starts a background goroutine (`collectSideEffects`) to drain the side-effect channel.
   - `(*Recorder).BeginRequestScope(startedAt int64) int64` -- Opens a request attribution scope and returns its ID.
-  - `(*Recorder).FinishRequestScope(scopeID int64, record *model.Record) error` -- Closes a request scope, flushes side effects through the collector, attaches the attributed effects to the record, and persists it.
+  - `(*Recorder).FinishRequestScope(scopeID int64, record *model.Record) error` -- Closes a request scope, drains collector-local backlog, attaches the attributed effects to the record, and persists it.
   - `(*Recorder).Record(record *model.Record) error` -- Persists a standalone record without request-scope attribution.
+  - `(*Recorder).SaveRequestBodyArtifact(recordID string, src io.Reader) (string, error)` -- Persists a full request-body artifact inside the current session directory and returns its relative path.
   - `(*Recorder).SideEffectChan() chan<- model.SideEffect` -- Returns a send-only channel so external components (DB hooks) can submit side effects without direct coupling.
   - `(*Recorder).Count() int64` -- Returns the number of records persisted so far.
   - `(*Recorder).Stop()` -- Signals the background goroutine to stop, drains remaining side effects, and waits for collector shutdown.
 - Key behaviors:
   - Side effects are collected asynchronously in a background goroutine and attributed to the best matching request scope by timestamp.
   - A matching scope is the active or closing request scope whose `startedAt` is not later than the effect timestamp and is the most recent such scope.
-  - `FinishRequestScope()` marks the scope closed at `record.RecordedAt`, issues a collector flush barrier, and only then removes the scope and persists the record. This keeps in-window effects attachable while preventing post-response effects from leaking in.
+  - `FinishRequestScope()` marks the scope closed at `record.RecordedAt`, drains collector-local backlog, and only then removes the scope and persists the record. In the current pipeline, `capture.Proxy` performs the upstream DB-hook flush before this method is called.
   - Effects with no matching scope are treated as orphans: they are logged and discarded instead of being attached to the next unrelated request.
   - The side-effect channel has a buffer of 1000 to avoid blocking DB hook goroutines.
   - On `Stop()`, the background goroutine drains any remaining items from the channel before returning, ensuring no already-sent side effects are lost during shutdown.
@@ -49,6 +50,7 @@
   - `shadiff/internal/storage` -- `FileStore` for persisting records to disk.
 - External:
   - `fmt` -- Error wrapping.
+  - `io` -- Artifact streaming interface for stored request-body snapshots.
   - `sync` -- `Mutex`, `Once`, and `WaitGroup` for request-scope and shutdown coordination.
   - `sync/atomic` -- Lock-free record and scope counters.
 

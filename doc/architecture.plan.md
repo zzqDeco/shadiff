@@ -54,7 +54,8 @@ Stages are decoupled -- they can be run independently, at different times, even 
 1. Client sends HTTP request to Shadiff's listening address (default `:18080`).
 2. `capture.Proxy` (wrapping `httputil.ReverseProxy`) intercepts the request:
    - Checks excluded paths before starting capture work.
-   - Wraps included request bodies with a streaming tap that records only the configured prefix while forwarding the full body to the target service.
+   - Snapshots the full included request body before proxying so capture does not depend on how much of the body the upstream target reads.
+   - Keeps only the configured inline preview in `HTTPRequest.Body` and stores oversized or truncated-request bodies as session artifacts referenced by `HTTPRequest.BodyRef`.
    - Builds a `model.HTTPRequest` struct.
    - Forwards the request to the target service via the reverse proxy.
    - Wraps the `ResponseWriter` with a `responseRecorder` to capture status code, headers, and body.
@@ -63,9 +64,10 @@ Stages are decoupled -- they can be run independently, at different times, even 
    - A monotonically increasing sequence number (atomic counter)
    - Duration in milliseconds
    - An 8-character UUID as record ID
-4. The proxy closes the request scope in `capture.Recorder` and passes the completed record for persistence.
-5. The Recorder flushes side effects collected from DB hooks, attaches those whose timestamps fall within the request scope, and then calls `FileStore.AppendRecord()`.
-6. `FileStore` serializes the record as a single JSON line and appends it to `records.jsonl` with file-level mutex protection.
+4. If DB hooks are configured, the proxy flushes the hook group and waits for already-observed side effects to reach the recorder sink.
+5. The proxy closes the request scope in `capture.Recorder` and passes the completed record for persistence.
+6. The Recorder drains collector-local backlog, attaches those side effects whose timestamps fall within the request scope, and then calls `FileStore.AppendRecord()`.
+7. `FileStore` serializes the record as a single JSON line and appends it to `records.jsonl` with file-level mutex protection; full request-body artifacts are stored separately under `artifacts/request-bodies/`.
 
 ### 2.2 Side-Effect Capture (DB Hooks)
 
@@ -141,11 +143,13 @@ DB hooks operate as TCP proxies that sit between the application and the real da
 3. For each record, `replay.Transform()` converts `model.HTTPRequest` into a Go `*http.Request`:
    - Rewrites the base URL to the new target.
    - Copies original headers, applies overrides, removes proxy headers (`X-Forwarded-*`).
+   - Uses the full stored request-body artifact when `BodyRef` is present, otherwise falls back to the inline `Request.Body` preview for historical sessions.
 4. The worker sends the request via `http.Client` and captures the response.
-5. When replay DB capture is enabled, side effects emitted by replay DB hooks are collected and attached to the replay record whose start/end window contains the effect timestamp.
-6. A new `model.Record` is built for the replay result (preserving the original sequence number for pairing). Failed replays are still persisted with `Error` populated.
-7. Results are saved to `replay-records.jsonl`.
-8. Session status is updated to `replayed`.
+5. When replay DB capture is enabled, the engine flushes the DB-hook group after each replayed request so already-observed effects reach the replay sink before attribution runs.
+6. Side effects emitted by replay DB hooks are then attached to the replay record whose start/end window contains the effect timestamp.
+7. A new `model.Record` is built for the replay result (preserving the original sequence number for pairing). Failed replays are still persisted with `Error` populated.
+8. Results are saved to `replay-records.jsonl`.
+9. Session status is updated to `replayed`.
 
 ### 2.4 Diff Phase
 

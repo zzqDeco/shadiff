@@ -1,6 +1,7 @@
 package replay
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -17,6 +18,12 @@ type Engine struct {
 	delay              time.Duration
 	sideEffectCh       <-chan model.SideEffect
 	pendingSideEffects []model.SideEffect
+	flusher            sideEffectFlusher
+	flushTimeout       time.Duration
+}
+
+type sideEffectFlusher interface {
+	Flush(context.Context) error
 }
 
 // EngineConfig holds the replay engine configuration
@@ -28,6 +35,8 @@ type EngineConfig struct {
 	RetryCount   int
 	Delay        time.Duration
 	SideEffectCh <-chan model.SideEffect
+	Flusher      sideEffectFlusher
+	FlushTimeout time.Duration
 }
 
 // NewEngine creates a new replay engine
@@ -49,9 +58,11 @@ func NewEngine(store *storage.FileStore, cfg EngineConfig) *Engine {
 	return &Engine{
 		store:        store,
 		sessionID:    cfg.SessionID,
-		pool:         NewWorkerPool(concurrency, timeout, cfg.RetryCount, transform),
+		pool:         NewWorkerPool(store, concurrency, timeout, cfg.RetryCount, transform),
 		delay:        cfg.Delay,
 		sideEffectCh: cfg.SideEffectCh,
+		flusher:      cfg.Flusher,
+		flushTimeout: cfg.FlushTimeout,
 	}
 }
 
@@ -117,6 +128,7 @@ func (e *Engine) executeSequentialWithSideEffects(records []model.Record) []Repl
 
 	for i, rec := range records {
 		result := e.pool.replayOne(rec)
+		e.flushSideEffects()
 		result.Replayed.SideEffects = e.takeSideEffectsWindow(result.StartedAt, result.FinishedAt)
 		results[i] = result
 		if e.delay > 0 && i < len(records)-1 {
@@ -180,5 +192,22 @@ func (e *Engine) drainSideEffects() {
 		default:
 			return
 		}
+	}
+}
+
+func (e *Engine) flushSideEffects() {
+	if e.flusher == nil {
+		return
+	}
+
+	ctx := context.Background()
+	cancel := func() {}
+	if e.flushTimeout > 0 {
+		ctx, cancel = context.WithTimeout(ctx, e.flushTimeout)
+	}
+	defer cancel()
+
+	if err := e.flusher.Flush(ctx); err != nil {
+		logger.Warn("replay side-effect flush failed", "error", err.Error())
 	}
 }

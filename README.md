@@ -145,6 +145,7 @@ shadiff record -t http://old-api:8080 -l :18080 \
 ```
 
 Point your traffic to `localhost:18080` instead of the old API. All requests, responses, and database operations are recorded.
+When recording uses DB proxies, Shadiff flushes hook-delivered side effects before each request scope closes so late-delivered in-window effects are less likely to be lost.
 
 #### Daemon Mode
 
@@ -173,6 +174,7 @@ shadiff replay -s "migration-v1" -t http://new-api:9090 \
 ```
 
 When replay uses `--db-proxy`, DB side effects are captured into `replay-records.jsonl` and replay must stay serial (`--concurrency 1`).
+Replay also flushes DB-hook telemetry before each request window is finalized so semantic diff sees in-window SQL and Mongo side effects more reliably.
 
 ### 3. Compare Results
 
@@ -187,7 +189,15 @@ shadiff diff -s "migration-v1" -r rules.yaml --ignore-order
 
 # JSON output for scripts/CI
 shadiff diff -s "migration-v1" -o json
+
+# Write CI JSON to a file
+shadiff diff -s "migration-v1" -o json --output-file diff.json
+
+# Fail CI when unignored differences are found
+shadiff diff -s "migration-v1" --fail-on diff
 ```
+
+`--fail-on` accepts `none` (default), `diff`, or `error`. Use `diff` to fail on any unignored difference, or `error` to fail only when unignored error-severity differences exist.
 
 ### 4. Generate Report
 
@@ -270,7 +280,8 @@ Example:
 
 Notes:
 
-- `capture.maxBodySize` truncates recorded request/response bodies but keeps the original `bodyLen`.
+- `capture.maxBodySize` truncates the inline recorded request/response body preview but keeps the original `bodyLen`.
+- When a request body is truncated inline, Shadiff stores the full request body under the session directory and replay uses that artifact automatically.
 - `capture.excludePaths` skips recording matching HTTP paths while still proxying them.
 - `capture.dbProxies` uses the same format as `--db-proxy`.
 - `diff.rulesFile` accepts JSON, YAML, or YML rule files.
@@ -290,6 +301,8 @@ All persistent data is stored under `~/.shadiff/`:
         ├── records.jsonl              # Recorded behavior (JSONL streaming)
         ├── replay-records.jsonl       # Replay results
         ├── diff-results.json          # Diff results
+        ├── artifacts/
+        │   └── request-bodies/        # Full request-body artifacts used for faithful replay
         ├── pidfile                    # Daemon PID file (daemon mode only)
         └── daemon.log                 # Daemon stdout/stderr log (daemon mode only)
 ```

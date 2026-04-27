@@ -1,8 +1,9 @@
 package replay
 
 import (
+	"bytes"
+	"io"
 	"net/http"
-	"strings"
 
 	"shadiff/internal/model"
 )
@@ -16,16 +17,33 @@ type TransformConfig struct {
 
 // Transform transforms a recorded request to adapt it for the replay target
 func Transform(req model.HTTPRequest, cfg TransformConfig) *http.Request {
+	var body io.ReadCloser = http.NoBody
+	if len(req.Body) > 0 {
+		body = io.NopCloser(bytes.NewReader(req.Body))
+	}
+	return TransformWithBody(req, cfg, body, int64(len(req.Body)))
+}
+
+// TransformWithBody transforms a recorded request and injects the provided body reader.
+func TransformWithBody(req model.HTTPRequest, cfg TransformConfig, body io.ReadCloser, contentLength int64) *http.Request {
 	// Build full URL
 	urlStr := cfg.TargetBaseURL + req.Path
 	if req.Query != "" {
 		urlStr += "?" + req.Query
 	}
 
-	httpReq, err := http.NewRequest(req.Method, urlStr, strings.NewReader(string(req.Body)))
+	httpReq, err := http.NewRequest(req.Method, urlStr, nil)
 	if err != nil {
+		if body != nil {
+			_ = body.Close()
+		}
 		return nil
 	}
+	if body == nil {
+		body = http.NoBody
+	}
+	httpReq.Body = body
+	httpReq.ContentLength = contentLength
 
 	// Copy original headers
 	for k, vs := range req.Headers {

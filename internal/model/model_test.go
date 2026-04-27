@@ -177,6 +177,7 @@ func TestHTTPRequest_FieldAssignment(t *testing.T) {
 		Query:   "page=1&size=10",
 		Headers: map[string][]string{"Content-Type": {"application/json"}},
 		Body:    []byte(`{"key":"value"}`),
+		BodyRef: "artifacts/request-bodies/rec-1.bin",
 		BodyLen: 15,
 	}
 	if req.Method != "POST" {
@@ -193,6 +194,9 @@ func TestHTTPRequest_FieldAssignment(t *testing.T) {
 	}
 	if string(req.Body) != `{"key":"value"}` {
 		t.Errorf("Body = %q, want %q", string(req.Body), `{"key":"value"}`)
+	}
+	if req.BodyRef != "artifacts/request-bodies/rec-1.bin" {
+		t.Errorf("BodyRef = %q, want %q", req.BodyRef, "artifacts/request-bodies/rec-1.bin")
 	}
 	if req.BodyLen != 15 {
 		t.Errorf("BodyLen = %d, want 15", req.BodyLen)

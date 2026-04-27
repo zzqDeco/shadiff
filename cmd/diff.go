@@ -21,6 +21,8 @@ var (
 	diffIgnoreOrder   bool
 	diffIgnoreHeaders []string
 	diffOutput        string
+	diffOutputFile    string
+	diffFailOn        string
 )
 
 var diffCmd = &cobra.Command{
@@ -40,6 +42,8 @@ func init() {
 	diffCmd.Flags().BoolVar(&diffIgnoreOrder, "ignore-order", false, "Ignore JSON array order")
 	diffCmd.Flags().StringArrayVar(&diffIgnoreHeaders, "ignore-headers", nil, "Additional headers to ignore")
 	diffCmd.Flags().StringVarP(&diffOutput, "output", "o", "terminal", "Output format: terminal, json")
+	diffCmd.Flags().StringVar(&diffOutputFile, "output-file", "", "Write diff output to file instead of stdout")
+	diffCmd.Flags().StringVar(&diffFailOn, "fail-on", "none", "Exit with failure on: none, diff, error")
 
 	diffCmd.MarkFlagRequired("session")
 	rootCmd.AddCommand(diffCmd)
@@ -50,6 +54,16 @@ func runDiff(cmd *cobra.Command, args []string) error {
 	diffIgnoreOrder = effectiveBool(cmd.Flags().Changed("ignore-order"), diffIgnoreOrder, cfg.Diff.IgnoreOrder)
 	diffIgnoreHeaders = effectiveStrings(cmd.Flags().Changed("ignore-headers"), diffIgnoreHeaders, cfg.Diff.IgnoreHeaders)
 	diffRulesFile = effectiveString(cmd.Flags().Changed("rules"), diffRulesFile, cfg.Diff.RulesFile)
+
+	outputFormat := currentDiffOutput(cmd)
+	if err := validateDiffOutput(outputFormat); err != nil {
+		return err
+	}
+	failPolicy := currentDiffFailOn(cmd)
+	if err := validateDiffFailOn(failPolicy); err != nil {
+		return err
+	}
+	outputFile := currentDiffOutputFile(cmd)
 
 	// Initialize logger
 	if err := logger.Init(currentLogDir(), effectiveLogLevel()); err != nil {
@@ -96,22 +110,36 @@ func runDiff(cmd *cobra.Command, args []string) error {
 	summary := diff.FormatDiffSummary(results)
 	summary.SessionID = sessionID
 
-	if err := writeDiffResults(cmd, results, summary, os.Stdout); err != nil {
-		return err
+	output := io.Writer(os.Stdout)
+	var file *os.File
+	if outputFile != "" {
+		file, err = os.Create(outputFile)
+		if err != nil {
+			return fmt.Errorf("failed to create diff output file: %w", err)
+		}
+		defer file.Close()
+		output = file
 	}
 
-	return nil
+	if err := writeDiffResults(outputFormat, results, summary, output); err != nil {
+		return err
+	}
+	if outputFile != "" {
+		fmt.Fprintf(os.Stdout, "Diff output written: %s\n", outputFile)
+	}
+
+	return enforceDiffFailOn(failPolicy, summary)
 }
 
-func writeDiffResults(cmd *cobra.Command, results []model.DiffResult, summary model.DiffSummary, w io.Writer) error {
-	switch strings.ToLower(currentDiffOutput(cmd)) {
+func writeDiffResults(outputFormat string, results []model.DiffResult, summary model.DiffSummary, w io.Writer) error {
+	switch strings.ToLower(outputFormat) {
 	case "", "terminal":
 		printDiffResults(w, results, summary)
 		return nil
 	case "json":
 		return (&reporter.JSONReporter{}).Generate(results, summary, w)
 	default:
-		return fmt.Errorf("unsupported diff output format: %s", currentDiffOutput(cmd))
+		return fmt.Errorf("unsupported diff output format: %s", outputFormat)
 	}
 }
 
@@ -128,6 +156,67 @@ func currentDiffOutput(cmd *cobra.Command) string {
 		return "terminal"
 	}
 	return diffOutput
+}
+
+func currentDiffOutputFile(cmd *cobra.Command) string {
+	if cmd != nil {
+		flags := cmd.Flags()
+		if flags != nil && flags.Lookup("output-file") != nil {
+			if outputFile, err := flags.GetString("output-file"); err == nil {
+				return outputFile
+			}
+		}
+	}
+	return diffOutputFile
+}
+
+func currentDiffFailOn(cmd *cobra.Command) string {
+	if cmd != nil {
+		flags := cmd.Flags()
+		if flags != nil && flags.Lookup("fail-on") != nil {
+			if failOn, err := flags.GetString("fail-on"); err == nil && failOn != "" {
+				return failOn
+			}
+		}
+	}
+	if diffFailOn == "" {
+		return "none"
+	}
+	return diffFailOn
+}
+
+func validateDiffOutput(outputFormat string) error {
+	switch strings.ToLower(outputFormat) {
+	case "", "terminal", "json":
+		return nil
+	default:
+		return fmt.Errorf("unsupported diff output format: %s", outputFormat)
+	}
+}
+
+func validateDiffFailOn(failPolicy string) error {
+	switch strings.ToLower(failPolicy) {
+	case "", "none", "diff", "error":
+		return nil
+	default:
+		return fmt.Errorf("unsupported diff fail-on policy: %s", failPolicy)
+	}
+}
+
+func enforceDiffFailOn(failPolicy string, summary model.DiffSummary) error {
+	switch strings.ToLower(failPolicy) {
+	case "", "none":
+		return nil
+	case "diff":
+		if summary.DiffCount > 0 {
+			return fmt.Errorf("diff failure policy triggered: %d records differ", summary.DiffCount)
+		}
+	case "error":
+		if summary.ErrorCount > 0 {
+			return fmt.Errorf("diff failure policy triggered: %d error differences", summary.ErrorCount)
+		}
+	}
+	return nil
 }
 
 func printDiffResults(w io.Writer, results []model.DiffResult, summary model.DiffSummary) {

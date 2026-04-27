@@ -12,7 +12,7 @@
 - Changes to this file should be kept in sync with project-level documentation.
 
 ## 3. Inputs & Outputs
-- Input sources: `model.HTTPRequest` (the recorded request), `TransformConfig` (target URL, header overrides, header removals).
+- Input sources: `model.HTTPRequest` (the recorded request), `TransformConfig` (target URL, header overrides, header removals), and optionally an injected request-body reader for artifact-backed replay.
 - Output results: `*http.Request` ready to be executed by an HTTP client, or `nil` if request construction fails.
 
 ## 4. Key Implementation Details
@@ -29,15 +29,17 @@
     4. Removing headers listed in `cfg.HeaderRemove`.
     5. Applying header overrides from `cfg.HeaderOverride`.
     6. Stripping proxy-related headers (`X-Forwarded-For`, `X-Forwarded-Host`, `X-Forwarded-Proto`).
+  - `TransformWithBody(req, cfg, body, contentLength)` -- same transformation flow, but uses the provided `io.ReadCloser` and explicit content length so replay can inject full-body artifacts without forcing them through `HTTPRequest.Body`.
 - Key behaviors:
   - Returns `nil` (not an error) if `http.NewRequest` fails, which the caller must handle.
+  - Preserves request body readers passed in from replay so large request-body artifacts can be streamed from disk.
   - Proxy headers are always removed regardless of configuration, ensuring clean replay requests.
   - Header operations are applied in order: copy -> remove -> override -> strip proxy headers.
 
 ## 5. Dependencies
 - Internal: `shadiff/internal/model` (for `HTTPRequest` type)
 - External:
-  - Standard library: `net/http`, `strings`.
+  - Standard library: `bytes`, `io`, `net/http`.
 
 ## 6. Change Impact
 - Changes to `TransformConfig` affect `Engine` construction in `engine.go` and `WorkerPool` initialization.
@@ -45,6 +47,6 @@
 - Adding new transformation steps (e.g., body rewriting, path prefix stripping) would affect all replayed requests.
 
 ## 7. Maintenance Notes
-- The request body is converted from `[]byte` to `string` and wrapped in `strings.NewReader`; this creates a copy. For large bodies, consider using `bytes.NewReader` directly to avoid the allocation.
+- `Transform` uses an inline preview body for backward compatibility, while `TransformWithBody` exists for artifact-backed replay paths.
 - Error handling returns `nil` instead of propagating the error from `http.NewRequest`; callers (specifically `replayOne` in `worker.go`) must check for nil.
 - The hardcoded proxy header removal could be made configurable if proxy headers need to be preserved in certain replay scenarios.

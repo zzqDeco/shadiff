@@ -41,9 +41,9 @@
   - `replayDBProxy []string` -- Database proxy specifications.
 - Key behaviors:
   - **Session resolution**: The `resolveSession()` function provides flexible lookup -- accepts either a session UUID or a human-readable name. When multiple name matches exist, it selects the first (latest) and prints a disambiguation message.
-  - **Replay DB proxies**: Parses `--db-proxy` CLI values, starts DB hooks when present, and wires their side-effect channel into the replay engine.
+  - **Replay DB proxies**: Parses `--db-proxy` CLI values, starts DB hooks when present, and wires their grouped side-effect channel plus flush barrier into the replay engine.
   - **Serial replay enforcement**: When replay DB proxies are enabled, rejects `concurrency > 1` with a clear validation error because DB side-effect attribution is request-window based.
-  - **Engine configuration**: Creates a `replay.EngineConfig` with session ID, target URL, concurrency, delay, and optional side-effect channel parameters, then delegates execution to `engine.Run()`.
+  - **Engine configuration**: Creates a `replay.EngineConfig` with session ID, target URL, concurrency, delay, optional side-effect channel parameters, and optional DB-hook flush settings, then delegates execution to `engine.Run()`.
   - **Error counting**: Iterates over results to count entries with non-nil `Error` fields for the summary.
   - **Session update**: After replay, updates the session's status to `SessionReplayed` and records the target URL. Errors during update are silently ignored.
 

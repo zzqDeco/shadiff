@@ -2,10 +2,12 @@ package capture
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"os"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -16,20 +18,30 @@ import (
 	"github.com/google/uuid"
 )
 
+const requestBodySpillThreshold int64 = 1 << 20
+
 // Proxy is an HTTP reverse proxy that transparently forwards requests and captures request/response pairs
 type Proxy struct {
 	target       *url.URL
 	proxy        *httputil.ReverseProxy
 	recorder     *Recorder
+	flusher      sideEffectFlusher
+	flushTimeout time.Duration
 	maxBodySize  int64
 	excludePaths []string
 	sequence     atomic.Int64
+}
+
+type sideEffectFlusher interface {
+	Flush(context.Context) error
 }
 
 // ProxyOptions controls optional capture-time behavior.
 type ProxyOptions struct {
 	MaxBodySize         int64
 	ExcludePathPrefixes []string
+	Flusher             sideEffectFlusher
+	FlushTimeout        time.Duration
 }
 
 // NewProxy creates a reverse proxy instance.
@@ -42,6 +54,8 @@ func NewProxy(targetURL string, recorder *Recorder, opts ProxyOptions) (*Proxy, 
 	p := &Proxy{
 		target:       target,
 		recorder:     recorder,
+		flusher:      opts.Flusher,
+		flushTimeout: opts.FlushTimeout,
 		maxBodySize:  opts.MaxBodySize,
 		excludePaths: append([]string(nil), opts.ExcludePathPrefixes...),
 	}
@@ -64,17 +78,51 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	seq := int(p.sequence.Add(1))
-
-	var reqBody *requestBodyCapture
-	if r.Body != nil {
-		reqBody = newRequestBodyCapture(r.Body, p.maxBodySize)
-		r.Body = reqBody
-	}
+	recordID := uuid.New().String()[:8]
 
 	reqMethod := r.Method
 	reqPath := r.URL.Path
 	reqQuery := r.URL.RawQuery
 	reqHeaders := cloneHeaders(r.Header)
+
+	var (
+		reqBody    []byte
+		reqBodyLen int64
+		reqBodyRef string
+	)
+	if r.Body != nil {
+		snapshot, err := captureRequestBodySnapshot(r.Body, p.maxBodySize)
+		if err != nil {
+			logger.Error("read request body failed", err, "method", reqMethod, "path", reqPath)
+			http.Error(w, "failed to read request body", http.StatusBadRequest)
+			return
+		}
+		defer snapshot.Cleanup()
+
+		restoreBody, err := snapshot.Reader()
+		if err != nil {
+			logger.Error("restore request body failed", err, "method", reqMethod, "path", reqPath)
+			http.Error(w, "failed to proxy request body", http.StatusInternalServerError)
+			return
+		}
+		r.Body = restoreBody
+		reqBody = snapshot.Body()
+		reqBodyLen = snapshot.BodyLen()
+
+		if snapshot.NeedsArtifact() {
+			artifactSource, err := snapshot.ArtifactSource()
+			if err != nil {
+				logger.Error("open request body artifact source failed", err, "record_id", recordID)
+			} else {
+				reqBodyRef, err = p.recorder.SaveRequestBodyArtifact(recordID, artifactSource)
+				_ = artifactSource.Close()
+				if err != nil {
+					logger.Error("save request body artifact failed", err, "record_id", recordID)
+				}
+			}
+		}
+	}
+
 	scopeID := p.recorder.BeginRequestScope(startTime.UnixMilli())
 
 	// Build HTTPRequest
@@ -83,6 +131,9 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		Path:    reqPath,
 		Query:   reqQuery,
 		Headers: reqHeaders,
+		Body:    reqBody,
+		BodyRef: reqBodyRef,
+		BodyLen: reqBodyLen,
 	}
 
 	// Use ResponseRecorder to capture the response
@@ -95,10 +146,7 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	p.proxy.ServeHTTP(rr, r)
 
 	duration := time.Since(startTime).Milliseconds()
-	if reqBody != nil {
-		httpReq.Body = reqBody.Body()
-		httpReq.BodyLen = reqBody.BodyLen()
-	}
+	p.flushSideEffects()
 
 	// Build HTTPResponse
 	httpResp := model.HTTPResponse{
@@ -110,7 +158,7 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// Build Record and pass it to the recorder
 	record := &model.Record{
-		ID:          uuid.New().String()[:8],
+		ID:          recordID,
 		Sequence:    seq,
 		Request:     httpReq,
 		Response:    httpResp,
@@ -130,6 +178,23 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		"duration_ms", duration,
 		"sequence", seq,
 	)
+}
+
+func (p *Proxy) flushSideEffects() {
+	if p.flusher == nil {
+		return
+	}
+
+	ctx := context.Background()
+	cancel := func() {}
+	if p.flushTimeout > 0 {
+		ctx, cancel = context.WithTimeout(ctx, p.flushTimeout)
+	}
+	defer cancel()
+
+	if err := p.flusher.Flush(ctx); err != nil {
+		logger.Warn("capture side-effect flush failed", "error", err.Error())
+	}
 }
 
 // director modifies the request target to the proxied service
@@ -195,55 +260,145 @@ func (p *Proxy) shouldSkip(path string) bool {
 }
 
 type requestBodyCapture struct {
-	body        io.ReadCloser
-	captured    bytes.Buffer
-	bodyLen     int64
-	maxBodySize int64
+	preview        bytes.Buffer
+	buffer         bytes.Buffer
+	tempFile       *os.File
+	tempPath       string
+	bodyLen        int64
+	maxPreviewSize int64
 }
 
-func newRequestBodyCapture(body io.ReadCloser, maxBodySize int64) *requestBodyCapture {
-	return &requestBodyCapture{
-		body:        body,
-		maxBodySize: maxBodySize,
+func captureRequestBodySnapshot(body io.ReadCloser, maxPreviewSize int64) (*requestBodyCapture, error) {
+	snapshot := &requestBodyCapture{
+		maxPreviewSize: maxPreviewSize,
 	}
-}
-
-func (c *requestBodyCapture) Read(p []byte) (int, error) {
-	n, err := c.body.Read(p)
-	if n > 0 {
-		c.bodyLen += int64(n)
-		c.capture(p[:n])
+	if body == nil {
+		return snapshot, nil
 	}
-	return n, err
-}
+	defer body.Close()
 
-func (c *requestBodyCapture) Close() error {
-	return c.body.Close()
+	buf := make([]byte, 32*1024)
+	for {
+		n, err := body.Read(buf)
+		if n > 0 {
+			if writeErr := snapshot.writeChunk(buf[:n]); writeErr != nil {
+				snapshot.Cleanup()
+				return nil, writeErr
+			}
+		}
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			snapshot.Cleanup()
+			return nil, err
+		}
+	}
+
+	if err := snapshot.closeTempFile(); err != nil {
+		snapshot.Cleanup()
+		return nil, err
+	}
+
+	return snapshot, nil
 }
 
 func (c *requestBodyCapture) Body() []byte {
-	return append([]byte(nil), c.captured.Bytes()...)
+	return append([]byte(nil), c.preview.Bytes()...)
 }
 
 func (c *requestBodyCapture) BodyLen() int64 {
 	return c.bodyLen
 }
 
-func (c *requestBodyCapture) capture(chunk []byte) {
-	if c.maxBodySize == 0 {
-		return
+func (c *requestBodyCapture) NeedsArtifact() bool {
+	return c.bodyLen > int64(len(c.preview.Bytes()))
+}
+
+func (c *requestBodyCapture) Reader() (io.ReadCloser, error) {
+	if c.tempPath != "" {
+		return os.Open(c.tempPath)
 	}
-	if c.maxBodySize < 0 {
-		_, _ = c.captured.Write(chunk)
+	return io.NopCloser(bytes.NewReader(c.buffer.Bytes())), nil
+}
+
+func (c *requestBodyCapture) ArtifactSource() (io.ReadCloser, error) {
+	return c.Reader()
+}
+
+func (c *requestBodyCapture) Cleanup() {
+	if c.tempFile != nil {
+		_ = c.tempFile.Close()
+		c.tempFile = nil
+	}
+	if c.tempPath != "" {
+		_ = os.Remove(c.tempPath)
+		c.tempPath = ""
+	}
+}
+
+func (c *requestBodyCapture) capture(chunk []byte) {
+	if c.maxPreviewSize == 0 {
 		return
 	}
 
-	remaining := c.maxBodySize - int64(c.captured.Len())
+	remaining := c.maxPreviewSize - int64(c.preview.Len())
 	if remaining <= 0 {
 		return
 	}
 	if remaining > int64(len(chunk)) {
 		remaining = int64(len(chunk))
 	}
-	_, _ = c.captured.Write(chunk[:remaining])
+	_, _ = c.preview.Write(chunk[:remaining])
+}
+
+func (c *requestBodyCapture) writeChunk(chunk []byte) error {
+	c.bodyLen += int64(len(chunk))
+	c.capture(chunk)
+
+	if c.tempFile != nil {
+		_, err := c.tempFile.Write(chunk)
+		return err
+	}
+
+	if int64(c.buffer.Len()+len(chunk)) <= requestBodySpillThreshold {
+		_, _ = c.buffer.Write(chunk)
+		return nil
+	}
+
+	tempFile, err := os.CreateTemp("", "shadiff-request-body-*")
+	if err != nil {
+		return err
+	}
+	if _, err := tempFile.Write(c.buffer.Bytes()); err != nil {
+		_ = tempFile.Close()
+		_ = os.Remove(tempFile.Name())
+		return err
+	}
+	c.buffer.Reset()
+
+	if _, err := tempFile.Write(chunk); err != nil {
+		_ = tempFile.Close()
+		_ = os.Remove(tempFile.Name())
+		return err
+	}
+
+	c.tempFile = tempFile
+	return nil
+}
+
+func (c *requestBodyCapture) closeTempFile() error {
+	if c.tempFile == nil {
+		return nil
+	}
+
+	c.tempPath = c.tempFile.Name()
+	if err := c.tempFile.Close(); err != nil {
+		_ = os.Remove(c.tempPath)
+		c.tempPath = ""
+		c.tempFile = nil
+		return err
+	}
+	c.tempFile = nil
+	return nil
 }

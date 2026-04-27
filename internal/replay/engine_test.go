@@ -1,14 +1,27 @@
 package replay
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 
 	"shadiff/internal/model"
 	"shadiff/internal/storage"
 )
+
+type fakeEngineFlusher struct {
+	flush func(context.Context) error
+}
+
+func (f fakeEngineFlusher) Flush(ctx context.Context) error {
+	if f.flush == nil {
+		return nil
+	}
+	return f.flush(ctx)
+}
 
 func newReplayStore(t *testing.T) (*storage.FileStore, *model.Session) {
 	t.Helper()
@@ -175,5 +188,107 @@ func TestEngineRun_AttachesReplayDBSideEffects(t *testing.T) {
 	}
 	if len(replays) != 1 || len(replays[0].SideEffects) != 1 {
 		t.Fatalf("persisted replay sideEffects = %+v", replays)
+	}
+}
+
+func TestEngineRun_FlushesReplaySideEffectsBeforeWindowClose(t *testing.T) {
+	store, session := newReplayStore(t)
+	original := &model.Record{
+		ID:        "orig-1",
+		SessionID: session.ID,
+		Sequence:  1,
+		Request: model.HTTPRequest{
+			Method: "GET",
+			Path:   "/hello",
+		},
+	}
+	if err := store.AppendRecord(session.ID, original); err != nil {
+		t.Fatalf("AppendRecord() error: %v", err)
+	}
+
+	var (
+		mu         sync.Mutex
+		lateEffect model.SideEffect
+	)
+	sideEffects := make(chan model.SideEffect, 4)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		lateEffect = model.SideEffect{
+			Type:      model.SideEffectDB,
+			DBType:    "mysql",
+			Query:     "SELECT late",
+			Timestamp: time.Now().UnixMilli(),
+		}
+		mu.Unlock()
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte("ok"))
+	}))
+	defer server.Close()
+
+	engine := NewEngine(store, EngineConfig{
+		SessionID:    session.ID,
+		TargetURL:    server.URL,
+		SideEffectCh: sideEffects,
+		Flusher: fakeEngineFlusher{flush: func(ctx context.Context) error {
+			mu.Lock()
+			effect := lateEffect
+			mu.Unlock()
+			sideEffects <- effect
+			return nil
+		}},
+		FlushTimeout: 50 * time.Millisecond,
+	})
+	results, err := engine.Run()
+	if err != nil {
+		t.Fatalf("Run() error: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("len(results) = %d, want 1", len(results))
+	}
+	if len(results[0].Replayed.SideEffects) != 1 {
+		t.Fatalf("replayed sideEffects len = %d, want 1", len(results[0].Replayed.SideEffects))
+	}
+	if results[0].Replayed.SideEffects[0].Query != "SELECT late" {
+		t.Fatalf("side effect query = %q, want %q", results[0].Replayed.SideEffects[0].Query, "SELECT late")
+	}
+}
+
+func TestEngineRun_FlushTimeoutDoesNotFailReplay(t *testing.T) {
+	store, session := newReplayStore(t)
+	original := &model.Record{
+		ID:        "orig-1",
+		SessionID: session.ID,
+		Sequence:  1,
+		Request: model.HTTPRequest{
+			Method: "GET",
+			Path:   "/hello",
+		},
+	}
+	if err := store.AppendRecord(session.ID, original); err != nil {
+		t.Fatalf("AppendRecord() error: %v", err)
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte("ok"))
+	}))
+	defer server.Close()
+
+	engine := NewEngine(store, EngineConfig{
+		SessionID:    session.ID,
+		TargetURL:    server.URL,
+		SideEffectCh: make(chan model.SideEffect, 1),
+		Flusher: fakeEngineFlusher{flush: func(ctx context.Context) error {
+			<-ctx.Done()
+			return ctx.Err()
+		}},
+		FlushTimeout: time.Millisecond,
+	})
+	results, err := engine.Run()
+	if err != nil {
+		t.Fatalf("Run() error: %v", err)
+	}
+	if len(results) != 1 || results[0].Error != nil {
+		t.Fatalf("unexpected replay results: %+v", results)
 	}
 }

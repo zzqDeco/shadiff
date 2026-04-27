@@ -2,6 +2,7 @@ package capture
 
 import (
 	"fmt"
+	"io"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -97,6 +98,11 @@ func (r *Recorder) FinishRequestScope(scopeID int64, record *model.Record) error
 // Record records a single behavior entry without request-scope attribution.
 func (r *Recorder) Record(record *model.Record) error {
 	return r.persistRecord(record)
+}
+
+// SaveRequestBodyArtifact stores a full request body snapshot for later replay.
+func (r *Recorder) SaveRequestBodyArtifact(recordID string, src io.Reader) (string, error) {
+	return r.store.SaveRequestBodyArtifact(r.sessionID, recordID, src)
 }
 
 func (r *Recorder) persistRecord(record *model.Record) error {
