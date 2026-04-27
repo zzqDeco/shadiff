@@ -110,12 +110,12 @@ go build -o shadiff .
 
 ## Development Branch Flow
 
-- `master` is the stable promotion branch and the current default branch.
+- `main` is the stable promotion branch and the current default branch.
 - `dev` is the integration branch for ongoing work.
+- `master` is a deprecated legacy branch and is no longer used for new work.
 - Create short-lived working branches from `dev`.
 - Open feature, fix, docs, refactor, and test PRs into `dev` first.
-- Promote `dev` into `master` with a separate PR when ready.
-- This repository currently does not use a `main` branch.
+- Promote `dev` into `main` with a separate PR when ready.
 
 ## Usage
 
@@ -174,6 +174,7 @@ shadiff replay -s "migration-v1" -t http://new-api:9090 \
 ```
 
 When replay uses `--db-proxy`, DB side effects are captured into `replay-records.jsonl` and replay must stay serial (`--concurrency 1`).
+If `--db-proxy` is omitted, replay falls back to `replay.dbProxies` from the config file.
 Replay also flushes DB-hook telemetry before each request window is finalized so semantic diff sees in-window SQL and Mongo side effects more reliably.
 
 ### 3. Compare Results
@@ -235,7 +236,7 @@ If the config file does not exist, Shadiff creates it automatically on first run
 | Block | Description |
 |-------|-------------|
 | `capture` | `listenAddr`, `maxBodySize`, `excludePaths`, `dbProxies` |
-| `replay` | `concurrency`, `timeout`, `retryCount`, `delayMs` |
+| `replay` | `concurrency`, `timeout`, `retryCount`, `delayMs`, `dbProxies` |
 | `diff` | `ignoreHeaders`, `ignoreOrder`, `maxDiffs`, `rules`, `rulesFile` |
 | `storage` | `dataDir`, `maxSessions` |
 | `log` | `level`, `logDir` |
@@ -260,7 +261,14 @@ Example:
     "concurrency": 5,
     "timeout": "30s",
     "retryCount": 1,
-    "delayMs": 100
+    "delayMs": 100,
+    "dbProxies": [
+      {
+        "type": "mysql",
+        "listenAddr": ":13307",
+        "targetAddr": "127.0.0.1:3306"
+      }
+    ]
   },
   "diff": {
     "ignoreOrder": true,

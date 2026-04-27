@@ -36,17 +36,27 @@ func Validate(cfg *AppConfig) error {
 		return fmt.Errorf("log.level must be one of debug, info, warn, error")
 	}
 
-	for i, proxy := range cfg.Capture.DBProxies {
-		if proxy.Type != "mysql" && proxy.Type != "postgres" && proxy.Type != "mongo" {
-			return fmt.Errorf("capture.dbProxies[%d].type must be mysql, postgres, or mongo", i)
-		}
-		if proxy.ListenAddr == "" {
-			return fmt.Errorf("capture.dbProxies[%d].listenAddr must not be empty", i)
-		}
-		if proxy.TargetAddr == "" {
-			return fmt.Errorf("capture.dbProxies[%d].targetAddr must not be empty", i)
-		}
+	if err := validateDBProxies("capture.dbProxies", cfg.Capture.DBProxies); err != nil {
+		return err
+	}
+	if err := validateDBProxies("replay.dbProxies", cfg.Replay.DBProxies); err != nil {
+		return err
 	}
 
+	return nil
+}
+
+func validateDBProxies(path string, proxies []DBProxyConfig) error {
+	for i, proxy := range proxies {
+		if proxy.Type != "mysql" && proxy.Type != "postgres" && proxy.Type != "mongo" {
+			return fmt.Errorf("%s[%d].type must be mysql, postgres, or mongo", path, i)
+		}
+		if proxy.ListenAddr == "" {
+			return fmt.Errorf("%s[%d].listenAddr must not be empty", path, i)
+		}
+		if proxy.TargetAddr == "" {
+			return fmt.Errorf("%s[%d].targetAddr must not be empty", path, i)
+		}
+	}
 	return nil
 }

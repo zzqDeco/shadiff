@@ -28,7 +28,7 @@
   - `replay.timeout` parses as `time.Duration`
   - `diff.maxDiffs >= 1`
   - `log.level` in `debug|info|warn|error`
-  - each DB proxy uses `mysql|postgres|mongo` and has non-empty listen/target addresses
+  - each capture and replay DB proxy uses `mysql|postgres|mongo` and has non-empty listen/target addresses
 - Validation is intentionally synchronous and side-effect free.
 
 ## 5. Dependencies

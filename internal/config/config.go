@@ -26,10 +26,11 @@ type DBProxyConfig struct {
 
 // ReplayConfig holds replay settings.
 type ReplayConfig struct {
-	Concurrency int    `json:"concurrency"` // Concurrency level
-	Timeout     string `json:"timeout"`     // Per-request timeout
-	RetryCount  int    `json:"retryCount"`  // Retry count
-	DelayMs     int    `json:"delayMs"`     // Delay between requests in ms
+	Concurrency int             `json:"concurrency"` // Concurrency level
+	Timeout     string          `json:"timeout"`     // Per-request timeout
+	RetryCount  int             `json:"retryCount"`  // Retry count
+	DelayMs     int             `json:"delayMs"`     // Delay between requests in ms
+	DBProxies   []DBProxyConfig `json:"dbProxies"`   // Replay-time DB proxy configuration list
 }
 
 // DiffConfig holds diff/comparison settings.

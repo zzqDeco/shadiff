@@ -131,7 +131,7 @@ Display version, commit hash, and build date.
 
 - JSON-based config file at `~/.shadiff/config.json`
 - Thread-safe `config.Store` with `Load()`, `Save()`, `Get()`, `Update(fn)` API
-- Sensible defaults via `DefaultConfig()`: proxy listen on `:18080`, 10MB max body, 30s replay timeout, concurrency 1, 1000 max diffs
+- Sensible defaults via `DefaultConfig()`: proxy listen on `:18080`, 10MB max body, 30s replay timeout, concurrency 1, no replay DB proxies unless configured, 1000 max diffs
 - Default ignored headers: `Date`, `X-Request-Id`, `X-Trace-Id`, `Server`, `Content-Length`
 - Supports per-command flag overrides (flags take precedence over config file)
 

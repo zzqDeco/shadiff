@@ -62,6 +62,18 @@ func TestValidate_InvalidValues(t *testing.T) {
 				cfg.Capture.DBProxies = []DBProxyConfig{{Type: "redis", ListenAddr: ":1", TargetAddr: ":2"}}
 			},
 		},
+		{
+			name: "bad replay db type",
+			mutate: func(cfg *AppConfig) {
+				cfg.Replay.DBProxies = []DBProxyConfig{{Type: "redis", ListenAddr: ":1", TargetAddr: ":2"}}
+			},
+		},
+		{
+			name: "empty replay db listen addr",
+			mutate: func(cfg *AppConfig) {
+				cfg.Replay.DBProxies = []DBProxyConfig{{Type: "mysql", TargetAddr: ":2"}}
+			},
+		},
 	}
 
 	for _, tt := range tests {

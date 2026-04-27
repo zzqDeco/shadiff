@@ -74,21 +74,33 @@ func TestResolveRecordDBProxies_UsesConfigWhenFlagUnchanged(t *testing.T) {
 	}
 }
 
-func TestResolveReplayDBProxies_UsesFlagsOnly(t *testing.T) {
-	proxies, err := resolveReplayDBProxies(true, []string{"mysql://:13307->127.0.0.1:3306"})
+func TestResolveReplayDBProxies_UsesConfigWhenFlagUnchanged(t *testing.T) {
+	cfg := config.DefaultConfig()
+	cfg.Replay.DBProxies = []config.DBProxyConfig{
+		{Type: "postgres", ListenAddr: ":15433", TargetAddr: "127.0.0.1:5432"},
+	}
+
+	proxies, err := resolveReplayDBProxies(false, nil, cfg)
+	if err != nil {
+		t.Fatalf("resolveReplayDBProxies() error: %v", err)
+	}
+	if len(proxies) != 1 || proxies[0].Type != "postgres" {
+		t.Fatalf("unexpected proxies: %+v", proxies)
+	}
+}
+
+func TestResolveReplayDBProxies_FlagsOverrideConfig(t *testing.T) {
+	cfg := config.DefaultConfig()
+	cfg.Replay.DBProxies = []config.DBProxyConfig{
+		{Type: "postgres", ListenAddr: ":15433", TargetAddr: "127.0.0.1:5432"},
+	}
+
+	proxies, err := resolveReplayDBProxies(true, []string{"mysql://:13307->127.0.0.1:3306"}, cfg)
 	if err != nil {
 		t.Fatalf("resolveReplayDBProxies() error: %v", err)
 	}
 	if len(proxies) != 1 || proxies[0].Type != "mysql" {
 		t.Fatalf("unexpected proxies: %+v", proxies)
-	}
-
-	proxies, err = resolveReplayDBProxies(false, []string{"mysql://:13307->127.0.0.1:3306"})
-	if err != nil {
-		t.Fatalf("resolveReplayDBProxies() unchanged error: %v", err)
-	}
-	if len(proxies) != 0 {
-		t.Fatalf("expected no replay proxies when flag unchanged, got %+v", proxies)
 	}
 }
 

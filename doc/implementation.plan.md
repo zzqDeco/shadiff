@@ -40,7 +40,7 @@ This document maps every package, source file, and key implementation pattern in
 | `root.go` | Root cobra command (`shadiff`); defines global flags (`--config`, `--verbose`, `--quiet`) and initializes runtime config in `PersistentPreRunE` |
 | `version.go` | `shadiff version` command; prints build-time injected Version, Commit, BuildDate |
 | `runtime.go` | Shared runtime context for config path, loaded config, data directory, log directory, and flag-over-config precedence helpers |
-| `dbproxy.go` | Helper logic for record/replay DB proxy parsing, config fallback for capture, hook startup, grouped side-effect fan-in, and flush-aware shutdown |
+| `dbproxy.go` | Helper logic for record/replay DB proxy parsing, config fallback for capture and replay, hook startup, grouped side-effect fan-in, and flush-aware shutdown |
 | `record.go` | `shadiff record` command; resolves config-backed capture settings, starts HTTP reverse proxy plus DB hooks, wires DB-hook flushing into capture, and supports `--daemon` mode via self-re-exec |
 | `record_stop.go` | `shadiff record stop` subcommand; stops a daemon recording session by sending signals (SIGTERM/os.Interrupt), with graceful wait and force kill fallback; includes `findSession()` helper for ID/name resolution |
 | `record_status.go` | `shadiff record status` subcommand; lists all active recording sessions or shows detailed status for a specific session including PID, process liveness, record count, and uptime |

@@ -48,7 +48,7 @@ func init() {
 func runReplay(cmd *cobra.Command, args []string) error {
 	cfg := currentConfig()
 	replayConcurrency = effectiveInt(cmd.Flags().Changed("concurrency"), replayConcurrency, cfg.Replay.Concurrency)
-	dbProxies, err := resolveReplayDBProxies(cmd.Flags().Changed("db-proxy"), replayDBProxy)
+	dbProxies, err := resolveReplayDBProxies(cmd.Flags().Changed("db-proxy"), replayDBProxy, cfg)
 	if err != nil {
 		return err
 	}

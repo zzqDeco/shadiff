@@ -21,7 +21,7 @@
   - `AppConfig` -- Root configuration. Fields: `Capture` (CaptureConfig), `Replay` (ReplayConfig), `Diff` (DiffConfig), `Storage` (StorageConfig), `Log` (LogConfig).
   - `CaptureConfig` -- Fields: `ListenAddr` (default ":18080"), `MaxBodySize` (bytes), `ExcludePaths` (prefix list), `DBProxies` (slice of DBProxyConfig).
   - `DBProxyConfig` -- Fields: `Type` (mysql/postgres/mongo), `ListenAddr`, `TargetAddr`.
-  - `ReplayConfig` -- Fields: `Concurrency`, `Timeout` (duration string), `RetryCount`, `DelayMs`.
+  - `ReplayConfig` -- Fields: `Concurrency`, `Timeout` (duration string), `RetryCount`, `DelayMs`, `DBProxies` (slice of DBProxyConfig for replay-time DB side-effect capture).
   - `DiffConfig` -- Fields: `IgnoreHeaders`, `IgnoreOrder` (JSON array order), `MaxDiffs`, `Rules` (slice of Rule), `RulesFile` (external rules file path).
   - `Rule` -- Diff rule definition. Fields: `Name`, `Kind` (ignore/transform/custom), `Paths` (glob-capable JSON paths), `Pattern` (regex, optional), `Matcher` (custom matcher name, optional).
   - `StorageConfig` -- Fields: `DataDir` (default ~/.shadiff), `MaxSessions`.
@@ -43,6 +43,7 @@
 ## 7. Maintenance Notes
 - All JSON tags use camelCase; maintain this convention.
 - `ReplayConfig.Timeout` is a string (e.g., "30s") rather than a numeric type; it must be parsed with `time.ParseDuration` at usage sites.
+- `ReplayConfig.DBProxies` defaults to nil. When populated, replay starts DB hooks unless `replay --db-proxy` is explicitly provided, in which case CLI values take precedence.
 - `DiffConfig.IgnoreHeaders` defaults include common non-deterministic headers; review this list when adding support for new environments.
 - `Rule.Paths` supports glob patterns for flexible JSON path matching; document supported glob syntax for users.
 - `MaxBodySize` default is 10MB (10 * 1024 * 1024); adjust if targeting environments with larger payloads.
