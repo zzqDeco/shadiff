@@ -2,6 +2,8 @@
 
 [English](README.md)
 
+[![CI](https://github.com/zzqDeco/shadiff/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/zzqDeco/shadiff/actions/workflows/ci.yml)
+
 ## 项目简介
 
 Shadiff 是一个影子流量语义对拍工具，用于跨框架/跨语言的 API 迁移验证。通过**录制-回放-对拍**三段式流程：以反向代理方式透明采集老 API 的完整行为（输入、输出、数据库副作用），然后将相同的输入回放到新 API，语义级比较两边的行为差异。
@@ -116,6 +118,8 @@ go build -o shadiff .
 - 日常开发使用从 `dev` 切出的短期工作分支。
 - 功能、修复、文档、重构和测试类 PR 先合入 `dev`。
 - 当 `dev` 稳定后，再单独发起 `dev -> main` 的 PR。
+
+GitHub Actions 会在 `main` 和 `dev` 的 push / pull request 上运行 `go test ./...` 和 `go build -o shadiff .`。匹配 `v*.*.*` 的发布标签会构建 Linux、macOS、Windows 的 amd64/arm64 压缩包，并生成 SHA-256 校验和。
 
 ## 使用方法
 

@@ -1,0 +1,90 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to build and upload assets for
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build release assets
+    runs-on: ubuntu-latest
+    env:
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+      CGO_ENABLED: '0'
+
+    steps:
+      - name: Checkout release ref
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.x'
+          cache: true
+
+      - name: Build archives
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mkdir -p dist
+          commit="$(git rev-parse --short HEAD)"
+          build_date="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          ldflags="-X shadiff/cmd.Version=${RELEASE_TAG} -X shadiff/cmd.Commit=${commit} -X shadiff/cmd.BuildDate=${build_date}"
+
+          targets=(
+            "linux amd64"
+            "linux arm64"
+            "darwin amd64"
+            "darwin arm64"
+            "windows amd64"
+            "windows arm64"
+          )
+
+          for target in "${targets[@]}"; do
+            read -r goos goarch <<< "${target}"
+            name="shadiff_${RELEASE_TAG}_${goos}_${goarch}"
+            binary="${name}/shadiff"
+            if [[ "${goos}" == "windows" ]]; then
+              binary="${binary}.exe"
+            fi
+
+            mkdir -p "${name}"
+            GOOS="${goos}" GOARCH="${goarch}" go build -trimpath -ldflags "${ldflags}" -o "${binary}" .
+
+            if [[ "${goos}" == "windows" ]]; then
+              (cd "${name}" && zip -q "../dist/${name}.zip" "shadiff.exe")
+            else
+              tar -czf "dist/${name}.tar.gz" -C "${name}" shadiff
+            fi
+
+            rm -rf "${name}"
+          done
+
+          (cd dist && sha256sum * > checksums.txt)
+
+      - name: Upload release assets
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          if gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
+            gh release upload "${RELEASE_TAG}" dist/* --clobber
+          else
+            gh release create "${RELEASE_TAG}" dist/* --title "${RELEASE_TAG}" --generate-notes
+          fi
