@@ -20,7 +20,7 @@
   - `--target` / `-t` (required): Target service URL to replay requests against (e.g., `http://localhost:9090`).
   - `--concurrency` / `-c`: Number of concurrent replay workers (default 1).
   - `--delay`: Delay between requests as a Go duration string (e.g., `100ms`).
-  - `--db-proxy`: Database proxy specifications for capturing DB side effects during replay.
+  - `--db-proxy`: Database proxy specifications for capturing DB side effects during replay; overrides `replay.dbProxies` from config.
   - Reads recorded request data from the file store at `~/.shadiff`.
 - Output results:
   - Stores replay responses in the file store linked to the session.
@@ -41,7 +41,7 @@
   - `replayDBProxy []string` -- Database proxy specifications.
 - Key behaviors:
   - **Session resolution**: The `resolveSession()` function provides flexible lookup -- accepts either a session UUID or a human-readable name. When multiple name matches exist, it selects the first (latest) and prints a disambiguation message.
-  - **Replay DB proxies**: Parses `--db-proxy` CLI values, starts DB hooks when present, and wires their grouped side-effect channel plus flush barrier into the replay engine.
+  - **Replay DB proxies**: Resolves `--db-proxy` CLI values first, falls back to `replay.dbProxies` from config, starts DB hooks when present, and wires their grouped side-effect channel plus flush barrier into the replay engine.
   - **Serial replay enforcement**: When replay DB proxies are enabled, rejects `concurrency > 1` with a clear validation error because DB side-effect attribution is request-window based.
   - **Engine configuration**: Creates a `replay.EngineConfig` with session ID, target URL, concurrency, delay, optional side-effect channel parameters, and optional DB-hook flush settings, then delegates execution to `engine.Run()`.
   - **Error counting**: Iterates over results to count entries with non-nil `Error` fields for the summary.
@@ -65,7 +65,7 @@
 - Session status transitions (`SessionReplayed`) are defined in `model`; adding new statuses or changing the workflow sequence affects this file.
 
 ## 7. Maintenance Notes
-- Replay DB proxy support is intentionally CLI-flag-driven in the current iteration; extending it to config requires an explicit `ReplayConfig` schema change and validation updates.
+- Replay DB proxy support accepts either explicit CLI flags or `replay.dbProxies` config values. Keep CLI precedence higher than config values.
 - The `store.Update(session)` error after replay is silently ignored. Consider logging the error at minimum.
 - The `resolveSession()` function assumes `store.List()` returns sessions ordered by creation time (latest first). Verify this assumption holds in the storage implementation.
 - Concurrency default is 1 (sequential replay). When replay DB proxies are enabled, this is also the required mode.

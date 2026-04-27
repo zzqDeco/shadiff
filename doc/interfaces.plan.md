@@ -93,9 +93,9 @@ shadiff replay -s "user-module-migration" -t http://localhost:9090 -c 5
 | `--target` | `-t` | | Yes | Replay target address (e.g. `http://localhost:9090`) |
 | `--concurrency` | `-c` | `1` | No | Concurrency level (worker pool size) |
 | `--delay` | | | No | Delay between requests (e.g. `100ms`) |
-| `--db-proxy` | | | No | DB proxy specification (repeatable); enables replay-time DB side-effect capture and requires `--concurrency 1` |
+| `--db-proxy` | | | No | DB proxy specification (repeatable); overrides `replay.dbProxies`, enables replay-time DB side-effect capture, and requires `--concurrency 1` |
 
-**Behavior**: Resolves the session by ID or name, loads all recorded records, replays them against the target using a configurable worker pool, and saves replay records to `replay-records.jsonl`. Replay prefers full request-body artifacts referenced by `HTTPRequest.BodyRef` when present, and falls back to inline `Request.Body` for historical sessions. When `--db-proxy` is set, replay also captures DB side effects into replay records using request-window attribution and flushes hook-delivered telemetry before each replay window is finalized. Updates the session status to `replayed`.
+**Behavior**: Resolves the session by ID or name, loads all recorded records, replays them against the target using a configurable worker pool, and saves replay records to `replay-records.jsonl`. Replay prefers full request-body artifacts referenced by `HTTPRequest.BodyRef` when present, and falls back to inline `Request.Body` for historical sessions. When `--db-proxy` is set, replay uses those CLI DB proxy values; otherwise it falls back to `replay.dbProxies` from config. When replay DB proxies are enabled, replay captures DB side effects into replay records using request-window attribution, flushes hook-delivered telemetry before each replay window is finalized, and rejects concurrency above 1. Updates the session status to `replayed`.
 
 ---
 

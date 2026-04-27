@@ -110,12 +110,12 @@ go build -o shadiff .
 
 ## 开发分支流转
 
-- `master` 是稳定发布基线，也是当前默认分支。
+- `main` 是稳定发布基线，也是当前默认分支。
 - `dev` 是日常集成分支。
+- `master` 是已弃用的历史分支，不再承接新工作。
 - 日常开发使用从 `dev` 切出的短期工作分支。
 - 功能、修复、文档、重构和测试类 PR 先合入 `dev`。
-- 当 `dev` 稳定后，再单独发起 `dev -> master` 的 PR。
-- 当前仓库没有 `main` 分支。
+- 当 `dev` 稳定后，再单独发起 `dev -> main` 的 PR。
 
 ## 使用方法
 
@@ -174,6 +174,7 @@ shadiff replay -s "migration-v1" -t http://new-api:9090 \
 ```
 
 当 replay 启用 `--db-proxy` 时，DB side effect 会写入 `replay-records.jsonl`，并且回放必须保持串行（`--concurrency 1`）。
+如果未传 `--db-proxy`，replay 会回退使用配置文件中的 `replay.dbProxies`。
 回放在每条请求窗口收口前也会先 flush DB-hook telemetry，让语义 diff 更稳定地拿到窗口内的 SQL 和 Mongo 副作用。
 
 ### 3. 对比结果
@@ -235,7 +236,7 @@ CLI flag > config.json > 内置默认值
 | 配置块 | 说明 |
 |--------|------|
 | `capture` | `listenAddr`、`maxBodySize`、`excludePaths`、`dbProxies` |
-| `replay` | `concurrency`、`timeout`、`retryCount`、`delayMs` |
+| `replay` | `concurrency`、`timeout`、`retryCount`、`delayMs`、`dbProxies` |
 | `diff` | `ignoreHeaders`、`ignoreOrder`、`maxDiffs`、`rules`、`rulesFile` |
 | `storage` | `dataDir`、`maxSessions` |
 | `log` | `level`、`logDir` |
@@ -260,7 +261,14 @@ CLI flag > config.json > 内置默认值
     "concurrency": 5,
     "timeout": "30s",
     "retryCount": 1,
-    "delayMs": 100
+    "delayMs": 100,
+    "dbProxies": [
+      {
+        "type": "mysql",
+        "listenAddr": ":13307",
+        "targetAddr": "127.0.0.1:3306"
+      }
+    ]
   },
   "diff": {
     "ignoreOrder": true,

@@ -28,9 +28,9 @@ func resolveRecordDBProxies(flagChanged bool, flagValues []string, cfg *config.A
 	return proxies, nil
 }
 
-func resolveReplayDBProxies(flagChanged bool, flagValues []string) ([]config.DBProxyConfig, error) {
+func resolveReplayDBProxies(flagChanged bool, flagValues []string, cfg *config.AppConfig) ([]config.DBProxyConfig, error) {
 	if !flagChanged {
-		return nil, nil
+		return append([]config.DBProxyConfig(nil), cfg.Replay.DBProxies...), nil
 	}
 
 	proxies := make([]config.DBProxyConfig, 0, len(flagValues))

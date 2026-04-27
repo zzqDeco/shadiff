@@ -122,15 +122,15 @@ Plan documents live in `plan/`. Each plan should include:
 
 Base branches:
 
-- `master`: stable promotion branch and current default branch
+- `main`: stable promotion branch and current default branch
 - `dev`: integration branch for day-to-day changes
+- `master`: deprecated legacy branch; do not target new work here
 
 Workflow rules:
 
 - Create short-lived working branches from `dev`.
 - Open normal feature, fix, docs, refactor, test, and release-prep PRs into `dev` first.
-- Promote `dev` into `master` with a separate PR when the integration branch is ready.
-- The repository currently does not use a `main` branch.
+- Promote `dev` into `main` with a separate PR when the integration branch is ready.
 
 Branch naming:
 

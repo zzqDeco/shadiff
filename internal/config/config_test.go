@@ -45,6 +45,9 @@ func TestDefaultConfig_ReplayDefaults(t *testing.T) {
 	if cfg.Replay.DelayMs != 0 {
 		t.Errorf("Replay.DelayMs = %d, want 0", cfg.Replay.DelayMs)
 	}
+	if cfg.Replay.DBProxies != nil {
+		t.Errorf("Replay.DBProxies = %v, want nil", cfg.Replay.DBProxies)
+	}
 }
 
 func TestDefaultConfig_DiffDefaults(t *testing.T) {

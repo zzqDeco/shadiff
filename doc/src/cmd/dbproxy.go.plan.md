@@ -16,7 +16,7 @@
 ## 3. Inputs & Outputs
 - Inputs:
   - `flagChanged bool` and raw CLI values from `record --db-proxy` or `replay --db-proxy`
-  - Runtime config `cfg.Capture.DBProxies`
+  - Runtime config `cfg.Capture.DBProxies` or `cfg.Replay.DBProxies`
   - `context.Context` used to manage DB hook lifetimes
   - `chan<- model.SideEffect` used as the sink for emitted side effects
 - Outputs:
@@ -27,7 +27,7 @@
 ## 4. Key Implementation Details
 - Main helpers:
   - `resolveRecordDBProxies(...)` implements precedence: if the flag changed, parse CLI values; otherwise clone config values.
-  - `resolveReplayDBProxies(...)` parses replay CLI values only; if the flag was not set, replay DB proxies stay empty.
+  - `resolveReplayDBProxies(...)` implements precedence: if the flag changed, parse CLI values; otherwise clone `cfg.Replay.DBProxies`.
   - `parseDBProxySpec(spec string)` parses strings like `mysql://:13306->127.0.0.1:3306`.
   - `startDBHooks(...)` constructs each hook, starts it, and returns a `dbhook.Group` that owns side-effect fan-in plus flush/drain coordination into the provided sink channel.
   - `stopDBHooks(...)` best-effort stops any grouped hook owner that implements `Stop() error`.
@@ -52,6 +52,6 @@
 
 ## 7. Maintenance Notes
 - Keep `resolveRecordDBProxies(...)` as the single precedence resolver for DB proxies to avoid flag/config drift.
-- Keep replay DB proxies flag-driven unless the replay config schema is explicitly extended.
+- Keep replay DB proxy precedence aligned with capture: explicit CLI flags win over config, and omitted flags use config values.
 - If new DB types are added in `internal/capture/dbhook`, only `parseDBProxySpec(...)` syntax and downstream validation should need adjustment here.
 - If recorder backpressure behavior changes, revisit the side-effect forwarding goroutines in `startDBHooks(...)`.

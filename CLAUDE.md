@@ -65,8 +65,9 @@ All persistent data is stored under `~/.shadiff/`:
 
 ### Branch Management (Integration branch flow)
 
-`master` is the stable promotion branch and current default branch.
+`main` is the stable promotion branch and current default branch.
 `dev` is the integration branch for day-to-day changes.
+`master` is a deprecated legacy branch and is no longer used for new work.
 
 Branch naming:
 - `feature/<desc>` — new features
@@ -79,8 +80,7 @@ Branch naming:
 Rules:
 - Feature branches are created from `dev`
 - Normal pull requests target `dev` first
-- Promote `dev` into `master` through a separate pull request
-- The repository currently does not use a `main` branch
+- Promote `dev` into `main` through a separate pull request
 - Delete branches after merge
 - Keep branches short-lived
 
@@ -162,7 +162,7 @@ When modifying source files, update the corresponding doc file. When adding/remo
 
 ### Code Review Expectations
 
-- Feature PRs target `dev` unless the task is explicitly promoting `dev` into `master`
+- Feature PRs target `dev` unless the task is explicitly promoting `dev` into `main`
 - Reviewer checks: correctness, error handling, naming, test coverage
 - Follow standard Go conventions (gofmt, effective Go)
 - New interfaces must be documented in `doc/interfaces.plan.md`
