@@ -2,6 +2,8 @@
 
 [中文文档](README_CN.md)
 
+[![CI](https://github.com/zzqDeco/shadiff/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/zzqDeco/shadiff/actions/workflows/ci.yml)
+
 ## About
 
 Shadiff is a shadow traffic semantic comparison tool for cross-framework / cross-language API migration validation. It uses a **record-replay-diff** three-stage pipeline: transparently captures the old API's complete behavior (inputs, outputs, database side effects) via reverse proxy, then replays the same inputs against the new API and performs semantic-level comparison of both sides' behavior.
@@ -116,6 +118,8 @@ go build -o shadiff .
 - Create short-lived working branches from `dev`.
 - Open feature, fix, docs, refactor, and test PRs into `dev` first.
 - Promote `dev` into `main` with a separate PR when ready.
+
+GitHub Actions run `go test ./...` and `go build -o shadiff .` on pushes and pull requests for `main` and `dev`. Release tags matching `v*.*.*` build Linux, macOS, and Windows archives for amd64 and arm64, plus SHA-256 checksums.
 
 ## Usage
 
