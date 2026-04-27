@@ -19,6 +19,7 @@
 | `plan/replay-db-sideeffects.plan.md` | Close the DB side-effect replay and diff loop for MySQL, PostgreSQL, and MongoDB | Completed |
 | `plan/request-scoped-sideeffect-attribution.plan.md` | Replace next-record side-effect attachment with request-scoped attribution | Completed |
 | `plan/diff-ci-output.plan.md` | Make `shadiff diff` produce stable machine-readable output and CI-friendly exit codes | Completed |
+| `plan/ci-release-automation.plan.md` | Add GitHub Actions CI checks and cross-platform release asset automation | Completed |
 
 ## Phase History
 
