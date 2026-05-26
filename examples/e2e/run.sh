@@ -13,6 +13,7 @@ SESSION_NAME="e2e-${RUN_ID}"
 ASSERT=0
 KEEP=0
 RECORD_PID=""
+REPLAY_PID=""
 
 usage() {
   cat <<'USAGE'
@@ -79,6 +80,10 @@ cleanup() {
     kill -TERM "${RECORD_PID}" >/dev/null 2>&1 || true
     wait "${RECORD_PID}" >/dev/null 2>&1 || true
   fi
+  if [[ -n "${REPLAY_PID}" ]] && kill -0 "${REPLAY_PID}" >/dev/null 2>&1; then
+    kill -TERM "${REPLAY_PID}" >/dev/null 2>&1 || true
+    wait "${REPLAY_PID}" >/dev/null 2>&1 || true
+  fi
 
   if [[ "${KEEP}" -eq 0 ]]; then
     "${COMPOSE[@]}" down -v --remove-orphans >/dev/null 2>&1 || true
@@ -135,6 +140,30 @@ wait_process_exit() {
   done
 
   wait "${pid}" >/dev/null 2>&1 || true
+}
+
+wait_log_marker() {
+  local log_file="$1"
+  local marker="$2"
+  local pid="$3"
+  local label="$4"
+  local timeout_seconds="$5"
+  local deadline=$((SECONDS + timeout_seconds))
+
+  while true; do
+    if [[ -f "${log_file}" ]] && grep -q "${marker}" "${log_file}"; then
+      return
+    fi
+    if ! kill -0 "${pid}" >/dev/null 2>&1; then
+      wait "${pid}" >/dev/null 2>&1 || true
+      [[ -f "${log_file}" ]] && grep -q "${marker}" "${log_file}" && return
+      fail "${label} exited before completion marker: ${marker}"
+    fi
+    if (( SECONDS >= deadline )); then
+      fail "timed out waiting for ${label} completion marker: ${marker}"
+    fi
+    sleep 1
+  done
 }
 
 write_config() {
@@ -242,7 +271,12 @@ log "starting replay stage"
   --db-proxy "mysql://:13316->127.0.0.1:33306" \
   --db-proxy "postgres://:15442->127.0.0.1:35432" \
   --db-proxy "mongo://:27028->127.0.0.1:37017" \
-  >"${WORK_DIR}/artifacts/replay.log" 2>&1
+  >"${WORK_DIR}/artifacts/replay.log" 2>&1 &
+REPLAY_PID=$!
+wait_log_marker "${WORK_DIR}/artifacts/replay.log" "Replay summary:" "${REPLAY_PID}" "replay stage" 60
+kill -TERM "${REPLAY_PID}" >/dev/null 2>&1 || true
+wait_process_exit "${REPLAY_PID}" "replay stage" 10
+REPLAY_PID=""
 
 log "starting diff stage"
 "${SHADIFF_BIN}" --config "${CONFIG_FILE}" diff \
