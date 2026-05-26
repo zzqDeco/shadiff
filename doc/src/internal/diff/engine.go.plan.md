@@ -35,12 +35,9 @@
     1. Status code comparison.
     2. Header comparison (respecting `ignoreHeaders`).
     3. JSON body comparison via `JSONDiffer.Compare`.
-    4. SQL side-effect comparison via `CompareDBSideEffects`.
-    5. MongoDB side-effect comparison via `CompareMongoSideEffects`.
-    6. Redis side-effect comparison via `CompareRedisSideEffects`.
-    7. Residual non-DB side-effect count comparison.
-    8. Applies `RuleSet` to mark ignorable differences.
-    9. Determines overall match (true only if all non-ignored differences are absent).
+    4. Side-effect comparison via `CompareSideEffects`, which dispatches through the comparer registry.
+    5. Applies `RuleSet` to mark ignorable differences.
+    6. Determines overall match (true only if all non-ignored differences are absent).
   - `compareHeaders(expected, actual)` -- iterates expected headers, skipping ignored ones, and reports missing or differing headers as warnings.
 - Key behaviors:
   - Records are matched by sequence number, not by ID or request content.
@@ -64,6 +61,6 @@
 
 ## 7. Maintenance Notes
 - The `NumericToleranceMatcher` tolerance (0.001) is hardcoded; consider making it configurable via `EngineConfig`.
-- SQL, MongoDB, and Redis side effects are compared semantically through dedicated helper comparers; residual count comparison remains only for side-effect types that do not have a semantic comparer.
+- SQL, MongoDB, and Redis side effects are compared semantically through the side-effect comparer registry; residual count comparison remains only for side-effect types that do not have a registered semantic comparer.
 - Header comparison only checks expected headers against actual; extra headers in the replay response are not reported.
 - Errors during `SaveResults` are logged but do not fail the run; callers should be aware that results may not be persisted.

@@ -18,29 +18,32 @@
 
 ## 4. Key Implementation Details
 - Structs/interfaces:
-  - `SideEffect` -- A union-style struct with shared fields and database/HTTP-specific fields:
-    - Shared: `Type` (SideEffectType), `Timestamp` (Unix ms), `Duration` (ms).
-    - SQL databases (MySQL/PostgreSQL): `DBType`, `Query`, `Args` ([]any), `RowCount`.
-    - MongoDB: `Database`, `Collection`, `Operation` (find/insert/update/delete/aggregate), `Filter`, `Update`, `Documents`, `DocCount`.
-    - Redis: `RedisCommand`, `RedisKey`, `RedisArgs`.
-    - External HTTP: `HTTPReq` (*HTTPRequest), `HTTPResp` (*HTTPResponse).
-- Exported functions/methods: None. This file is purely type definitions.
+  - `SideEffect` -- Shared envelope with `Type`, `Timestamp`, `Duration`, and typed optional payloads `Database` / `HTTP`.
+  - `DatabaseSideEffect` -- Database payload discriminator with `Type` (`mysql`, `postgres`, `mongo`, `redis`) and protocol-specific `SQL`, `Mongo`, or `Redis` payload.
+  - `SQLSideEffect` -- SQL query, args, and row count.
+  - `MongoSideEffect` -- Database, collection, operation, filter, update, documents, and document count.
+  - `RedisSideEffect` -- Command, primary key, and normalized/redacted args.
+  - `HTTPSideEffect` -- External HTTP request/response payload.
+- Exported functions/methods:
+  - `NewSQLSideEffect`, `NewMongoSideEffect`, `NewRedisSideEffect` constructors.
+  - `DatabaseType`, `SQL`, `Mongo`, and `Redis` safe accessors.
 - Constants:
   - `SideEffectDB` ("database") -- Database operation side effect.
   - `SideEffectHTTP` ("http_call") -- External HTTP call side effect.
 
 ## 5. Dependencies
-- Internal: References `HTTPRequest` and `HTTPResponse` from `request.go` (same package) via pointer fields.
-- External: None (no imports).
+- Internal: References `HTTPRequest` and `HTTPResponse` from `request.go`; uses `internal/dbtype` constants for constructor payloads.
+- External: None.
 
 ## 6. Change Impact
 - Changes affect `Record` (record.go) since records contain a `SideEffect` slice.
-- Diff engine logic that compares side effects (db_query, mongo_op, redis_command, external_call difference kinds in diff.go) depends on these field names and types.
+- Diff engine logic that compares side effects consumes typed payload accessors rather than flat fields.
 - Adding new `SideEffectType` values requires corresponding diff logic and capture hook implementations.
+- This v0.4.0 shape intentionally breaks compatibility with v0.3.x flat side-effect JSON.
 
 ## 7. Maintenance Notes
-- The struct uses a flat union approach with `omitempty` on all type-specific fields. Only populate fields relevant to the `Type` value.
+- Keep one typed database payload populated per database side effect.
 - MongoDB fields (`Filter`, `Update`, `Documents`) use `any` type to accommodate arbitrary BSON-to-JSON conversions.
 - Redis arguments are already normalized, base64-encoded when non-UTF-8, and redacted for known credential-bearing commands before they reach the model.
-- `HTTPReq` and `HTTPResp` are pointers to allow nil when the side effect is not an HTTP call; always nil-check before access.
-- When adding a new side effect type (e.g., message queue, cache), add a new `SideEffectType` constant and extend the struct with new `omitempty` fields.
+- `HTTP` is a pointer to allow nil when the side effect is not an HTTP call; always nil-check before access.
+- When adding a new side-effect type, prefer a typed nested payload rather than reintroducing flat union fields.

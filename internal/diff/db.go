@@ -4,13 +4,14 @@ import (
 	"fmt"
 	"strings"
 
+	"shadiff/internal/dbtype"
 	"shadiff/internal/model"
 )
 
 // CompareDBSideEffects compares SQL database (MySQL/PostgreSQL) side effects
 func CompareDBSideEffects(original, replay []model.SideEffect) []model.Difference {
-	origSQL := filterByType(original, "mysql", "postgres")
-	replaySQL := filterByType(replay, "mysql", "postgres")
+	origSQL := filterByType(original, dbtype.MySQL, dbtype.Postgres)
+	replaySQL := filterByType(replay, dbtype.MySQL, dbtype.Postgres)
 
 	var diffs []model.Difference
 
@@ -34,17 +35,19 @@ func CompareDBSideEffects(original, replay []model.SideEffect) []model.Differenc
 
 	for i := 0; i < minLen; i++ {
 		path := fmt.Sprintf("sideEffects.db[%d]", i)
+		origPayload := origSQL[i].SQL()
+		replayPayload := replaySQL[i].SQL()
 
 		// Normalize SQL before comparing
-		origQuery := normalizeSQL(origSQL[i].Query)
-		replayQuery := normalizeSQL(replaySQL[i].Query)
+		origQuery := normalizeSQL(origPayload.Query)
+		replayQuery := normalizeSQL(replayPayload.Query)
 
 		if origQuery != replayQuery {
 			diffs = append(diffs, model.Difference{
 				Kind:     model.DiffDBQuery,
 				Path:     path + ".query",
-				Expected: origSQL[i].Query,
-				Actual:   replaySQL[i].Query,
+				Expected: origPayload.Query,
+				Actual:   replayPayload.Query,
 				Message:  "SQL statement differs",
 				Severity: model.SeverityError,
 			})
@@ -73,7 +76,7 @@ func filterByType(effects []model.SideEffect, dbTypes ...string) []model.SideEff
 
 	var result []model.SideEffect
 	for _, e := range effects {
-		if e.Type == model.SideEffectDB && typeSet[e.DBType] {
+		if e.Type == model.SideEffectDB && e.SQL() != nil && typeSet[e.DatabaseType()] {
 			result = append(result, e)
 		}
 	}

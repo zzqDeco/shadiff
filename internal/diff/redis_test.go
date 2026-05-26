@@ -6,12 +6,16 @@ import (
 	"shadiff/internal/model"
 )
 
+func testRedisSideEffect(command, key string, args ...string) model.SideEffect {
+	return model.NewRedisSideEffect(command, key, args, 0)
+}
+
 func TestCompareRedisSideEffects_Equal(t *testing.T) {
 	original := []model.SideEffect{
-		{Type: model.SideEffectDB, DBType: "redis", RedisCommand: "SET", RedisKey: "user:1", RedisArgs: []string{"user:1", "ada"}},
+		testRedisSideEffect("SET", "user:1", "user:1", "ada"),
 	}
 	replay := []model.SideEffect{
-		{Type: model.SideEffectDB, DBType: "redis", RedisCommand: "SET", RedisKey: "user:1", RedisArgs: []string{"user:1", "ada"}},
+		testRedisSideEffect("SET", "user:1", "user:1", "ada"),
 	}
 
 	diffs := CompareRedisSideEffects(original, replay)
@@ -22,11 +26,11 @@ func TestCompareRedisSideEffects_Equal(t *testing.T) {
 
 func TestCompareRedisSideEffects_DifferentCommandCount(t *testing.T) {
 	original := []model.SideEffect{
-		{Type: model.SideEffectDB, DBType: "redis", RedisCommand: "SET", RedisKey: "k1", RedisArgs: []string{"k1", "v1"}},
-		{Type: model.SideEffectDB, DBType: "redis", RedisCommand: "GET", RedisKey: "k1", RedisArgs: []string{"k1"}},
+		testRedisSideEffect("SET", "k1", "k1", "v1"),
+		testRedisSideEffect("GET", "k1", "k1"),
 	}
 	replay := []model.SideEffect{
-		{Type: model.SideEffectDB, DBType: "redis", RedisCommand: "SET", RedisKey: "k1", RedisArgs: []string{"k1", "v1"}},
+		testRedisSideEffect("SET", "k1", "k1", "v1"),
 	}
 
 	diffs := CompareRedisSideEffects(original, replay)
@@ -40,8 +44,8 @@ func TestCompareRedisSideEffects_DifferentCommandCount(t *testing.T) {
 
 func TestCompareRedisSideEffects_DifferentCommand(t *testing.T) {
 	diffs := CompareRedisSideEffects(
-		[]model.SideEffect{{Type: model.SideEffectDB, DBType: "redis", RedisCommand: "GET", RedisKey: "k1", RedisArgs: []string{"k1"}}},
-		[]model.SideEffect{{Type: model.SideEffectDB, DBType: "redis", RedisCommand: "DEL", RedisKey: "k1", RedisArgs: []string{"k1"}}},
+		[]model.SideEffect{testRedisSideEffect("GET", "k1", "k1")},
+		[]model.SideEffect{testRedisSideEffect("DEL", "k1", "k1")},
 	)
 	if len(diffs) != 1 || diffs[0].Path != "sideEffects.redis[0].command" {
 		t.Fatalf("expected command diff, got %+v", diffs)
@@ -50,8 +54,8 @@ func TestCompareRedisSideEffects_DifferentCommand(t *testing.T) {
 
 func TestCompareRedisSideEffects_DifferentKey(t *testing.T) {
 	diffs := CompareRedisSideEffects(
-		[]model.SideEffect{{Type: model.SideEffectDB, DBType: "redis", RedisCommand: "GET", RedisKey: "k1", RedisArgs: []string{"k1"}}},
-		[]model.SideEffect{{Type: model.SideEffectDB, DBType: "redis", RedisCommand: "GET", RedisKey: "k2", RedisArgs: []string{"k2"}}},
+		[]model.SideEffect{testRedisSideEffect("GET", "k1", "k1")},
+		[]model.SideEffect{testRedisSideEffect("GET", "k2", "k2")},
 	)
 	if len(diffs) != 2 {
 		t.Fatalf("expected key and args diffs, got %+v", diffs)
@@ -63,8 +67,8 @@ func TestCompareRedisSideEffects_DifferentKey(t *testing.T) {
 
 func TestCompareRedisSideEffects_DifferentArgs(t *testing.T) {
 	diffs := CompareRedisSideEffects(
-		[]model.SideEffect{{Type: model.SideEffectDB, DBType: "redis", RedisCommand: "SET", RedisKey: "k1", RedisArgs: []string{"k1", "v1"}}},
-		[]model.SideEffect{{Type: model.SideEffectDB, DBType: "redis", RedisCommand: "SET", RedisKey: "k1", RedisArgs: []string{"k1", "v2"}}},
+		[]model.SideEffect{testRedisSideEffect("SET", "k1", "k1", "v1")},
+		[]model.SideEffect{testRedisSideEffect("SET", "k1", "k1", "v2")},
 	)
 	if len(diffs) != 1 || diffs[0].Path != "sideEffects.redis[0].args" {
 		t.Fatalf("expected args diff, got %+v", diffs)
@@ -73,11 +77,11 @@ func TestCompareRedisSideEffects_DifferentArgs(t *testing.T) {
 
 func TestCompareRedisSideEffects_FiltersNonRedis(t *testing.T) {
 	original := []model.SideEffect{
-		{Type: model.SideEffectDB, DBType: "mysql", Query: "SELECT 1"},
+		model.NewSQLSideEffect("mysql", "SELECT 1", 0),
 		{Type: model.SideEffectHTTP},
 	}
 	replay := []model.SideEffect{
-		{Type: model.SideEffectDB, DBType: "mysql", Query: "SELECT 1"},
+		model.NewSQLSideEffect("mysql", "SELECT 1", 0),
 		{Type: model.SideEffectHTTP},
 	}
 

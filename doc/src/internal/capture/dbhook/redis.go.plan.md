@@ -8,8 +8,8 @@
 - Module: shadiff/internal/capture/dbhook
 
 ## 2. Core Responsibility
-- Implements a transparent TCP proxy for Redis plaintext traffic.
-- Parses client-to-server RESP array commands and inline commands while forwarding traffic unchanged.
+- Implements the Redis protocol parser used by the shared DB hook TCP proxy for plaintext traffic.
+- Parses client-to-server RESP array commands and inline commands.
 - Emits Redis command side effects for record/replay attribution and diffing.
 
 ## 3. Inputs & Outputs
@@ -17,13 +17,12 @@
   - TCP connections from Redis clients connecting to the proxy listen address.
   - Raw Redis client command bytes using RESP or inline command format.
 - Output results:
-  - Transparent bidirectional TCP forwarding to the real Redis target.
-  - `model.SideEffect` events with `DBType=redis`, `RedisCommand`, `RedisKey`, and `RedisArgs`.
+  - `model.SideEffect` events with `database.type=redis` and `database.redis.command/key/args`.
 
 ## 4. Key Implementation Details
-- `RedisHook` implements `DBHook` and mirrors the lifecycle used by the MySQL/PostgreSQL/MongoDB hooks.
+- `RedisHook` embeds the shared `tcpProxy` and supplies a Redis parser factory.
 - Each connection owns a `redisParser` buffer so fragmented reads and pipelined commands are parsed correctly.
-- `Flush(ctx)` sends a barrier to active connection sniff loops and waits for traffic already on the wire to be parsed.
+- DBHook lifecycle and `Flush(ctx)` behavior live in `tcp_proxy.go`.
 - The parser supports:
   - RESP arrays of bulk strings, the normal Redis client command format.
   - Inline commands such as `GET key`.
@@ -34,14 +33,14 @@
 
 ## 5. Dependencies
 - Internal:
-  - `shadiff/internal/logger`
+  - `shadiff/internal/dbtype`
   - `shadiff/internal/model`
 - External:
-  - Standard library networking, buffering, base64, string, and synchronization packages.
+  - Standard library byte scanning, base64, string, time, UTF-8, and integer parsing packages.
 
 ## 6. Change Impact
-- `hook.go` factory support must stay aligned with this file's `NewRedisHook` constructor.
-- `internal/model.SideEffect` Redis fields and `internal/diff/redis.go` determine how captured Redis commands are persisted and compared.
+- `hook.go` constructor registry support must stay aligned with this file's `NewRedisHook` constructor.
+- `internal/model.SideEffect` Redis typed payload and `internal/diff/redis.go` determine how captured Redis commands are persisted and compared.
 - The parser intentionally does not terminate TLS or implement Redis Cluster routing semantics.
 
 ## 7. Maintenance Notes

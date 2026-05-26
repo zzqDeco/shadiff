@@ -175,8 +175,8 @@ func TestMySQLHook_HandleConn_ForwardsTrafficAndCapturesQuery(t *testing.T) {
 	waitForHandleConn(t, handleDone)
 
 	effect := waitForSideEffect(t, hook.SideEffects())
-	if effect.Query != "SELECT 1" {
-		t.Fatalf("query = %q, want %q", effect.Query, "SELECT 1")
+	if effect.SQL().Query != "SELECT 1" {
+		t.Fatalf("query = %q, want %q", effect.SQL().Query, "SELECT 1")
 	}
 }
 
@@ -239,8 +239,8 @@ func TestPostgresHook_HandleConn_ForwardsTrafficAndCapturesQuery(t *testing.T) {
 	waitForHandleConn(t, handleDone)
 
 	effect := waitForSideEffect(t, hook.SideEffects())
-	if effect.Query != "SELECT 1" {
-		t.Fatalf("query = %q, want %q", effect.Query, "SELECT 1")
+	if effect.SQL().Query != "SELECT 1" {
+		t.Fatalf("query = %q, want %q", effect.SQL().Query, "SELECT 1")
 	}
 }
 
@@ -294,14 +294,14 @@ func TestMongoHook_HandleConn_ForwardsTrafficAndCapturesCommand(t *testing.T) {
 	waitForHandleConn(t, handleDone)
 
 	effect := waitForSideEffect(t, hook.SideEffects())
-	if effect.Operation != "find" {
-		t.Fatalf("operation = %q, want %q", effect.Operation, "find")
+	if effect.Mongo().Operation != "find" {
+		t.Fatalf("operation = %q, want %q", effect.Mongo().Operation, "find")
 	}
-	if effect.Collection != "users" {
-		t.Fatalf("collection = %q, want %q", effect.Collection, "users")
+	if effect.Mongo().Collection != "users" {
+		t.Fatalf("collection = %q, want %q", effect.Mongo().Collection, "users")
 	}
-	if effect.Database != "testdb" {
-		t.Fatalf("database = %q, want %q", effect.Database, "testdb")
+	if effect.Mongo().Database != "testdb" {
+		t.Fatalf("database = %q, want %q", effect.Mongo().Database, "testdb")
 	}
 }
 
@@ -351,14 +351,14 @@ func TestRedisHook_HandleConn_ForwardsTrafficAndCapturesCommand(t *testing.T) {
 	waitForHandleConn(t, handleDone)
 
 	effect := waitForSideEffect(t, hook.SideEffects())
-	if effect.RedisCommand != "SET" {
-		t.Fatalf("redis command = %q, want SET", effect.RedisCommand)
+	if effect.Redis().Command != "SET" {
+		t.Fatalf("redis command = %q, want SET", effect.Redis().Command)
 	}
-	if effect.RedisKey != "user:1" {
-		t.Fatalf("redis key = %q, want user:1", effect.RedisKey)
+	if effect.Redis().Key != "user:1" {
+		t.Fatalf("redis key = %q, want user:1", effect.Redis().Key)
 	}
-	if len(effect.RedisArgs) != 2 || effect.RedisArgs[0] != "user:1" || effect.RedisArgs[1] != "ada" {
-		t.Fatalf("redis args = %+v, want [user:1 ada]", effect.RedisArgs)
+	if len(effect.Redis().Args) != 2 || effect.Redis().Args[0] != "user:1" || effect.Redis().Args[1] != "ada" {
+		t.Fatalf("redis args = %+v, want [user:1 ada]", effect.Redis().Args)
 	}
 }
 

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"slices"
 
+	"shadiff/internal/dbtype"
 	"shadiff/internal/model"
 )
 
@@ -31,35 +32,35 @@ func CompareRedisSideEffects(original, replay []model.SideEffect) []model.Differ
 
 	for i := 0; i < minLen; i++ {
 		path := fmt.Sprintf("sideEffects.redis[%d]", i)
-		orig := origRedis[i]
-		rep := replayRedis[i]
+		orig := origRedis[i].Redis()
+		rep := replayRedis[i].Redis()
 
-		if orig.RedisCommand != rep.RedisCommand {
+		if orig.Command != rep.Command {
 			diffs = append(diffs, model.Difference{
 				Kind:     model.DiffRedisCommand,
 				Path:     path + ".command",
-				Expected: orig.RedisCommand,
-				Actual:   rep.RedisCommand,
+				Expected: orig.Command,
+				Actual:   rep.Command,
 				Message:  "Redis command differs",
 				Severity: model.SeverityError,
 			})
 		}
-		if orig.RedisKey != rep.RedisKey {
+		if orig.Key != rep.Key {
 			diffs = append(diffs, model.Difference{
 				Kind:     model.DiffRedisCommand,
 				Path:     path + ".key",
-				Expected: orig.RedisKey,
-				Actual:   rep.RedisKey,
+				Expected: orig.Key,
+				Actual:   rep.Key,
 				Message:  "Redis key differs",
 				Severity: model.SeverityError,
 			})
 		}
-		if !slices.Equal(orig.RedisArgs, rep.RedisArgs) {
+		if !slices.Equal(orig.Args, rep.Args) {
 			diffs = append(diffs, model.Difference{
 				Kind:     model.DiffRedisCommand,
 				Path:     path + ".args",
-				Expected: orig.RedisArgs,
-				Actual:   rep.RedisArgs,
+				Expected: orig.Args,
+				Actual:   rep.Args,
 				Message:  "Redis command arguments differ",
 				Severity: model.SeverityError,
 			})
@@ -72,7 +73,7 @@ func CompareRedisSideEffects(original, replay []model.SideEffect) []model.Differ
 func filterRedisEffects(effects []model.SideEffect) []model.SideEffect {
 	var result []model.SideEffect
 	for _, e := range effects {
-		if e.Type == model.SideEffectDB && e.DBType == "redis" {
+		if e.Type == model.SideEffectDB && e.DatabaseType() == dbtype.Redis && e.Redis() != nil {
 			result = append(result, e)
 		}
 	}

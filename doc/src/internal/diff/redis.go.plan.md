@@ -16,18 +16,18 @@
 - Output results: `[]model.Difference` entries with `redis_command_count` or `redis_command` kinds.
 
 ## 4. Key Implementation Details
-- `CompareRedisSideEffects(original, replay)` filters both inputs to `Type == SideEffectDB` and `DBType == "redis"`.
+- `CompareRedisSideEffects(original, replay)` filters both inputs to `Type == SideEffectDB`, `database.type == "redis"`, and a non-nil `database.redis` payload.
 - Commands are paired positionally by index.
 - Count, command, key, and argument differences are all `SeverityError`.
 - `filterRedisEffects(effects)` isolates Redis side effects so SQL, MongoDB, and HTTP side effects are ignored by this comparer.
 
 ## 5. Dependencies
-- Internal: `shadiff/internal/model`
+- Internal: `shadiff/internal/dbtype`, `shadiff/internal/model`
 - External: Standard library `fmt` and `slices`.
 
 ## 6. Change Impact
-- `engine.go` calls this comparer during record/replay comparison.
-- New Redis side-effect fields in `model.SideEffect` must stay aligned with this comparer.
+- `sideeffects.go` registers this comparer for engine-side record/replay comparison.
+- New `model.RedisSideEffect` fields must stay aligned with this comparer.
 - Difference kind names are part of JSON output consumed by scripts and E2E assertions.
 
 ## 7. Maintenance Notes

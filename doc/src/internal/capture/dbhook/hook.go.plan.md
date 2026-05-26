@@ -11,6 +11,7 @@
 - Defines the `DBHook` interface that all database protocol proxies must implement, providing a uniform API for starting, flushing, stopping, and receiving captured database side effects.
 - Provides a `Group` helper that fans hook side effects into a shared sink and coordinates flush/drain barriers across multiple hooks.
 - Provides a factory function (`NewHook`) that instantiates the correct database-specific hook based on configuration.
+- Uses a constructor registry keyed by `internal/dbtype` constants instead of a hardcoded switch.
 - Changes to this file should be kept in sync with project-level documentation.
 
 ## 3. Inputs & Outputs
@@ -32,17 +33,19 @@
   - `sideEffectForwarder` -- Internal helper that forwards one hook's side-effect channel into a shared sink and supports drain detection through a barrier acknowledgement channel.
   - `Config` -- Configuration struct with fields `DBType`, `ListenAddr`, and `TargetAddr`.
   - `UnsupportedDBError` -- Custom error type for unrecognized database types; implements the `error` interface.
+  - `hookConstructors` -- Internal registry mapping supported database types to hook constructors.
 - Exported functions/methods:
-  - `NewHook(cfg Config) (DBHook, error)` -- Factory function that switches on `cfg.DBType` and delegates to `NewMySQLHook`, `NewPostgresHook`, `NewMongoHook`, or `NewRedisHook`.
+  - `NewHook(cfg Config) (DBHook, error)` -- Factory function that resolves `cfg.DBType` through the constructor registry.
   - `NewGroup(ctx, hooks, sink)` -- Starts grouped side-effect forwarders for already-started hooks.
 - Key behaviors:
-  - The factory pattern centralizes hook creation, making it easy to add new database types by adding a case to the switch statement.
+  - The factory pattern centralizes hook creation, making it easy to add new database types by registering one constructor.
   - The `DBHook` interface decouples the capture pipeline from database-specific protocol parsing logic.
   - `Group.Flush(ctx)` first calls `Flush(ctx)` on every hook, then waits until forwarded side effects have reached the shared sink channel.
   - Forwarder drain uses a barrier handshake rather than only checking channel length. `WaitDrained(ctx)` sends a barrier through the forwarder goroutine and waits for the acknowledgement, preventing an early return when a side effect has already been consumed from the source channel but has not yet been delivered to the sink.
 
 ## 5. Dependencies
 - Internal:
+  - `shadiff/internal/dbtype` -- shared supported DB type constants.
   - `shadiff/internal/model` -- `SideEffect` type used in the `DBHook` interface's channel signature.
   - (Indirectly) `mysql.go`, `postgres.go`, `mongo.go`, `redis.go` in the same package -- implementations created by `NewHook`.
 - External:
@@ -54,7 +57,7 @@
 - `Recorder.SideEffectChan()` and replay-side sinks consume the channels returned by `SideEffects()` via `Group`.
 
 ## 7. Maintenance Notes
-- To add support for a new database (e.g., Redis, SQLite), add a new case to the `NewHook` switch and implement the full `DBHook` interface, including `Flush(ctx)`, in a new file.
+- To add support for a new database, add the DB type in `internal/dbtype`, register a constructor in `hookConstructors`, and implement a parser-backed hook.
 - The `Config` struct is minimal. If database-specific configuration is needed (e.g., TLS settings, authentication), consider embedding database-specific config sub-structs or using a map of options.
 - The `UnsupportedDBError` type enables callers to use `errors.As` for typed error handling if needed.
 - Keep `sideEffectForwarder.WaitDrained()` synchronized through the barrier channel. Replacing it with only `len(source)` / `inFlight` checks can reintroduce a race where `Group.Flush()` returns before sink delivery completes.

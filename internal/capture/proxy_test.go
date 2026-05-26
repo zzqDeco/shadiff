@@ -266,12 +266,7 @@ func TestProxy_ExcludedPathsDoNotInheritUnrelatedSideEffects(t *testing.T) {
 		t.Fatalf("NewProxy() error: %v", err)
 	}
 
-	recorder.SideEffectChan() <- model.SideEffect{
-		Type:      model.SideEffectDB,
-		DBType:    "mysql",
-		Query:     "SELECT orphan",
-		Timestamp: 1,
-	}
+	recorder.SideEffectChan() <- model.NewSQLSideEffect("mysql", "SELECT orphan", 1)
 
 	skippedReq := httptest.NewRequest(http.MethodGet, "http://proxy.local/healthz", nil)
 	skippedResp := httptest.NewRecorder()
@@ -307,12 +302,7 @@ func TestProxy_FlushesSideEffectsBeforeClosingScope(t *testing.T) {
 
 	proxy, err := NewProxy(target.URL, recorder, ProxyOptions{
 		Flusher: fakeFlusher{flush: func(ctx context.Context) error {
-			recorder.SideEffectChan() <- model.SideEffect{
-				Type:      model.SideEffectDB,
-				DBType:    "mysql",
-				Query:     "SELECT delayed",
-				Timestamp: time.Now().UnixMilli(),
-			}
+			recorder.SideEffectChan() <- model.NewSQLSideEffect("mysql", "SELECT delayed", time.Now().UnixMilli())
 			return nil
 		}},
 		FlushTimeout: 50 * time.Millisecond,
@@ -335,8 +325,8 @@ func TestProxy_FlushesSideEffectsBeforeClosingScope(t *testing.T) {
 	if len(records[0].SideEffects) != 1 {
 		t.Fatalf("sideEffects len = %d, want 1", len(records[0].SideEffects))
 	}
-	if records[0].SideEffects[0].Query != "SELECT delayed" {
-		t.Fatalf("side effect query = %q, want %q", records[0].SideEffects[0].Query, "SELECT delayed")
+	if records[0].SideEffects[0].SQL().Query != "SELECT delayed" {
+		t.Fatalf("side effect query = %q, want %q", records[0].SideEffects[0].SQL().Query, "SELECT delayed")
 	}
 }
 

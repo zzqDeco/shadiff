@@ -155,12 +155,7 @@ func TestEngineRun_AttachesReplayDBSideEffects(t *testing.T) {
 
 	sideEffects := make(chan model.SideEffect, 4)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		sideEffects <- model.SideEffect{
-			Type:      model.SideEffectDB,
-			DBType:    "mysql",
-			Query:     "SELECT 1",
-			Timestamp: time.Now().UnixMilli(),
-		}
+		sideEffects <- model.NewSQLSideEffect("mysql", "SELECT 1", time.Now().UnixMilli())
 		w.WriteHeader(http.StatusCreated)
 		_, _ = w.Write([]byte("ok"))
 	}))
@@ -213,12 +208,7 @@ func TestEngineRun_FlushesReplaySideEffectsBeforeWindowClose(t *testing.T) {
 	sideEffects := make(chan model.SideEffect, 4)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		mu.Lock()
-		lateEffect = model.SideEffect{
-			Type:      model.SideEffectDB,
-			DBType:    "mysql",
-			Query:     "SELECT late",
-			Timestamp: time.Now().UnixMilli(),
-		}
+		lateEffect = model.NewSQLSideEffect("mysql", "SELECT late", time.Now().UnixMilli())
 		mu.Unlock()
 		w.WriteHeader(http.StatusCreated)
 		_, _ = w.Write([]byte("ok"))
@@ -248,8 +238,8 @@ func TestEngineRun_FlushesReplaySideEffectsBeforeWindowClose(t *testing.T) {
 	if len(results[0].Replayed.SideEffects) != 1 {
 		t.Fatalf("replayed sideEffects len = %d, want 1", len(results[0].Replayed.SideEffects))
 	}
-	if results[0].Replayed.SideEffects[0].Query != "SELECT late" {
-		t.Fatalf("side effect query = %q, want %q", results[0].Replayed.SideEffects[0].Query, "SELECT late")
+	if results[0].Replayed.SideEffects[0].SQL().Query != "SELECT late" {
+		t.Fatalf("side effect query = %q, want %q", results[0].Replayed.SideEffects[0].SQL().Query, "SELECT late")
 	}
 }
 

@@ -3,6 +3,7 @@ package diff
 import (
 	"fmt"
 
+	"shadiff/internal/dbtype"
 	"shadiff/internal/model"
 )
 
@@ -33,8 +34,8 @@ func CompareMongoSideEffects(original, replay []model.SideEffect) []model.Differ
 
 	for i := 0; i < minLen; i++ {
 		path := fmt.Sprintf("sideEffects.mongo[%d]", i)
-		orig := origMongo[i]
-		rep := replayMongo[i]
+		orig := origMongo[i].Mongo()
+		rep := replayMongo[i].Mongo()
 
 		// Compare collection name
 		if orig.Collection != rep.Collection {
@@ -79,7 +80,7 @@ func CompareMongoSideEffects(original, replay []model.SideEffect) []model.Differ
 func filterMongoEffects(effects []model.SideEffect) []model.SideEffect {
 	var result []model.SideEffect
 	for _, e := range effects {
-		if e.Type == model.SideEffectDB && e.DBType == "mongo" {
+		if e.Type == model.SideEffectDB && e.DatabaseType() == dbtype.Mongo && e.Mongo() != nil {
 			result = append(result, e)
 		}
 	}
