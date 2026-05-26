@@ -119,7 +119,13 @@ go build -o shadiff .
 - Open feature, fix, docs, refactor, and test PRs into `dev` first.
 - Promote `dev` into `main` with a separate PR when ready.
 
-GitHub Actions run `go test ./...` and `go build -o shadiff .` on pushes and pull requests for `main` and `dev`. Release tags matching `v*.*.*` build Linux, macOS, and Windows archives for amd64 and arm64, plus SHA-256 checksums.
+GitHub Actions run `go test ./...` and `go build -o shadiff .` on pushes and pull requests for `main` and `dev`. Release tags matching `v*.*.*` build Linux, macOS, and Windows archives for amd64 and arm64, verify archive contents and version metadata, and publish SHA-256 checksums.
+
+Release assets can be checked locally after building `dist/`:
+
+```bash
+bash scripts/verify-release-assets.sh dist v0.1.1
+```
 
 ## Usage
 
