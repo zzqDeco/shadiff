@@ -51,6 +51,8 @@ If the Docker build host cannot reach the default Go module proxy, override it f
 SHADIFF_E2E_GOPROXY=https://goproxy.cn,direct ./examples/e2e/run.sh --assert
 ```
 
+The demo API image build uses Docker host networking so build-time proxy settings such as `HTTP_PROXY=http://127.0.0.1:7897` can reach a Clash/Mihomo proxy running on the Linux host.
+
 The script writes isolated runtime data under:
 
 ```text
@@ -110,4 +112,5 @@ ssh <linux-user>@<linux-host> 'cd /path/to/shadiff && git fetch origin && git ch
 - Port conflicts: stop the process using the listed ports, or run on a clean development machine.
 - Docker networking: the API containers rely on `host.docker.internal:host-gateway`, which is supported by modern Docker Engine on Linux.
 - Go module downloads: set `SHADIFF_E2E_GOPROXY` when `go mod download` inside the API image build cannot reach `proxy.golang.org`.
+- Local proxy during Docker build: because the API image build uses host networking, Docker build proxy variables that point at `127.0.0.1` resolve to the Linux host.
 - Failed assertions: inspect `examples/e2e/.work/<run-id>/artifacts/diff.json` and the stage logs.

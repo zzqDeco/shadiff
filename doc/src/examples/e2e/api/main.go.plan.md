@@ -20,6 +20,7 @@
 - MongoDB uses `go.mongodb.org/mongo-driver/v2`.
 - The demo intentionally opens and closes database clients per request so Shadiff DB proxy shutdown is deterministic during scripted runs.
 - The Docker build accepts a `GOPROXY` build argument, surfaced by the E2E runner as `SHADIFF_E2E_GOPROXY`, for hosts that cannot reach the default Go module proxy.
+- The API image build uses Docker host networking so build-time proxy variables can point at host-local proxies such as Clash/Mihomo on `127.0.0.1`.
 
 ## Operational Notes
 

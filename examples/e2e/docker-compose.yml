@@ -45,6 +45,7 @@ services:
     build:
       context: ../..
       dockerfile: examples/e2e/api/Dockerfile
+      network: host
       args:
         GOPROXY: ${SHADIFF_E2E_GOPROXY:-https://proxy.golang.org,direct}
     environment:
@@ -74,6 +75,7 @@ services:
     build:
       context: ../..
       dockerfile: examples/e2e/api/Dockerfile
+      network: host
       args:
         GOPROXY: ${SHADIFF_E2E_GOPROXY:-https://proxy.golang.org,direct}
     environment:
