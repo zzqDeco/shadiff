@@ -20,6 +20,7 @@
 | `plan/request-scoped-sideeffect-attribution.plan.md` | Replace next-record side-effect attachment with request-scoped attribution | Completed |
 | `plan/diff-ci-output.plan.md` | Make `shadiff diff` produce stable machine-readable output and CI-friendly exit codes | Completed |
 | `plan/ci-release-automation.plan.md` | Add GitHub Actions CI checks and cross-platform release asset automation | Completed |
+| `plan/v0.1.1-stability.plan.md` | Harden release automation and add Docker-backed DB side-effect integration coverage | Completed |
 
 ## Phase History
 

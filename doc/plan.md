@@ -7,8 +7,8 @@
 | Repository | `shadiff` (local, `E:\record\src\shadiff`) |
 | Type | CLI tool |
 | Name | **Shadiff** -- Shadow Traffic Semantic Diff Tool |
-| Language | Go 1.24 |
-| Source files | 36 `.go` files (25 production, 11 test) |
+| Language | Go 1.25 |
+| Source files | 45 production `.go` files plus 29 test files |
 | Business purpose | Validate behavioral consistency of cross-framework / cross-language API migrations through a black-box record-replay-diff workflow |
 
 Shadiff targets the scenario where a team is migrating or rewriting an API service (e.g., from Java Spring to Go, or from monolith to microservices). Instead of writing integration tests by hand, the operator points Shadiff at the old service, records live traffic (including database side effects), replays it against the new service, and gets a semantic diff report showing exactly what behaves differently.
@@ -20,14 +20,14 @@ Shadiff targets the scenario where a team is migrating or rewriting an API servi
 | Aspect | Detail |
 |--------|--------|
 | Build system | `go build` / `go install`, module path `shadiff` |
-| Go module | `go 1.24`, dependencies: `cobra` (CLI), `uuid` (ID generation) |
+| Go module | `go 1.25`, dependencies include `cobra` (CLI), `uuid` (ID generation), and Docker-backed integration test dependencies |
 | Entry point | `main.go` -> `cmd.Execute()` (Cobra root command) |
 | Configuration | JSON file at `~/.shadiff/config.json`, loaded by `internal/config/Store` with defaults via `DefaultConfig()` |
 | Storage | File-system based, data directory at `~/.shadiff/sessions/` |
 | Storage format | Session metadata in `session.json`, records in `records.jsonl` / `replay-records.jsonl` (JSONL streaming), diff results in `diff-results.json` |
 | Logging | `log/slog` with daily-rotated files at `~/.shadiff/logs/shadiff-YYYY-MM-DD.log`, dual output to stderr + file |
-| Version | `0.1.0`, build-time injected via `cmd.Version`, `cmd.Commit`, `cmd.BuildDate` |
-| Test coverage | Unit tests for: config, models, filestore, recorder, JSON diff, DB diff, MongoDB diff, rules, transforms, reporters, DB hook factory |
+| Version | `0.1.1`, build-time injected via `cmd.Version`, `cmd.Commit`, `cmd.BuildDate` |
+| Test coverage | Unit tests for core packages plus opt-in Docker-backed integration tests for DB side-effect capture |
 
 ---
 

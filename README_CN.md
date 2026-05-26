@@ -22,7 +22,7 @@ Shadiff 是一个影子流量语义对拍工具，用于跨框架/跨语言的 A
 
 | 技术 | 版本 | 用途 |
 |------|------|------|
-| Go | 1.24 | 主语言 |
+| Go | 1.25 | 主语言 |
 | Cobra | v1.9 | CLI 框架 |
 | slog | 标准库 | 结构化日志 + 日志轮转 |
 | JSONL | - | 流式记录存储 |
@@ -32,7 +32,7 @@ Shadiff 是一个影子流量语义对拍工具，用于跨框架/跨语言的 A
 ```
 shadiff/
 ├── main.go                            # CLI 入口
-├── go.mod                             # Go 1.24 模块
+├── go.mod                             # Go 1.25 模块
 ├── CLAUDE.md                          # 开发者指南
 ├── cmd/                               # CLI 命令
 │   ├── root.go                        # Cobra 根命令，全局 flags
@@ -94,7 +94,7 @@ shadiff/
 
 ### 环境要求
 
-- **Go** >= 1.24
+- **Go** >= 1.25
 
 ### 安装
 
@@ -119,7 +119,19 @@ go build -o shadiff .
 - 功能、修复、文档、重构和测试类 PR 先合入 `dev`。
 - 当 `dev` 稳定后，再单独发起 `dev -> main` 的 PR。
 
-GitHub Actions 会在 `main` 和 `dev` 的 push / pull request 上运行 `go test ./...` 和 `go build -o shadiff .`。匹配 `v*.*.*` 的发布标签会构建 Linux、macOS、Windows 的 amd64/arm64 压缩包，并生成 SHA-256 校验和。
+GitHub Actions 会在 `main` 和 `dev` 的 push / pull request 上运行 `go test ./...` 和 `go build -o shadiff .`。匹配 `v*.*.*` 的发布标签会构建 Linux、macOS、Windows 的 amd64/arm64 压缩包，校验压缩包内容和版本元数据，并生成 SHA-256 校验和。
+
+构建出 `dist/` 后可以在本地校验发布资产：
+
+```bash
+bash scripts/verify-release-assets.sh dist v0.1.1
+```
+
+Docker-backed 数据库集成测试是可选测试，不包含在默认单元测试命令中：
+
+```bash
+go test -v -tags integration ./internal/integration -count=1 -timeout=20m
+```
 
 ## 使用方法
 

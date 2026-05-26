@@ -30,6 +30,20 @@ Exclusions:
 |---|---|---|---|
 | `main.go` | `doc/src/main.go.plan.md` | Entry Point | root |
 
+### scripts/
+
+| Source File | Doc File | File Type | Module |
+|---|---|---|---|
+| `scripts/verify-release-assets.sh` | - | Release Tooling | scripts |
+
+### .github/workflows/
+
+| Source File | Doc File | File Type | Module |
+|---|---|---|---|
+| `.github/workflows/ci.yml` | - | GitHub Actions Workflow | ci |
+| `.github/workflows/integration.yml` | - | GitHub Actions Workflow | ci |
+| `.github/workflows/release.yml` | - | GitHub Actions Workflow | ci |
+
 ### cmd/
 
 | Source File | Doc File | File Type | Module |

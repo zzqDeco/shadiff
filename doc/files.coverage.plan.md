@@ -5,7 +5,8 @@
 | Metric | Count |
 |---|---|
 | Total source files (non-test `.go`) | 45 |
-| Test files (`*_test.go`) | 28 |
+| Test files (`*_test.go`) | 29 |
+| Project tooling files | 4 |
 | Project-level docs (`doc/*.md`) | 6 |
 | File-level docs (`doc/src/**/*.plan.md`) | 45 |
 | Project-level coverage | 100% |
@@ -27,13 +28,16 @@
 | diff | `internal/diff/` | 6 | 6 | 6 | 100% |
 | reporter | `internal/reporter/` | 4 | 1 | 4 | 100% |
 | logger | `internal/logger/` | 1 | 2 | 1 | 100% |
-| **Total** | | **45** | **28** | **45** | **100%** |
+| integration | `internal/integration/` | 0 | 1 | 0 | n/a |
+| **Total** | | **45** | **29** | **45** | **100%** |
 
 ## File Types Breakdown
 
 | File Type | Count | Files |
 |---|---|---|
 | Entry Point | 1 | `main.go` |
+| Release Tooling | 1 | `scripts/verify-release-assets.sh` |
+| GitHub Actions Workflows | 3 | `.github/workflows/ci.yml`, `.github/workflows/integration.yml`, `.github/workflows/release.yml` |
 | CLI Command / Helper | 11 | `cmd/root.go`, `cmd/version.go`, `cmd/session.go`, `cmd/runtime.go`, `cmd/dbproxy.go`, `cmd/record.go`, `cmd/record_stop.go`, `cmd/record_status.go`, `cmd/replay.go`, `cmd/diff.go`, `cmd/report.go` |
 | Data Model | 5 | `internal/model/session.go`, `internal/model/record.go`, `internal/model/request.go`, `internal/model/sideeffect.go`, `internal/model/diff.go` |
 | Configuration | 3 | `internal/config/config.go`, `internal/config/store.go`, `internal/config/validate.go` |
@@ -64,4 +68,5 @@ The following directories and file patterns are excluded from the documentation 
 | Daemon support docs added | 2026-03-04 |
 | Config runtime docs synchronized | 2026-03-09 |
 | Test inventory and file coverage refreshed | 2026-03-09 |
-| Last updated | 2026-03-09 |
+| Release and integration tooling inventory added | 2026-05-26 |
+| Last updated | 2026-05-26 |

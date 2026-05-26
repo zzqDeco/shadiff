@@ -22,7 +22,7 @@ Out of scope:
 
 ## Approach
 
-- Use `actions/setup-go@v5` with Go `1.24.x`.
+- Use the current `actions/setup-go` major version with the repository Go toolchain.
 - Keep CI lightweight: dependency download, `go test ./...`, and `go build -o shadiff .`.
 - Build release assets with `CGO_ENABLED=0`, injecting `Version`, `Commit`, and `BuildDate` through `-ldflags`.
 - Support both tag-push releases and manual dispatch so existing releases can be backfilled with assets.
