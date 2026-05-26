@@ -45,6 +45,12 @@ To keep containers running for troubleshooting:
 ./examples/e2e/run.sh --assert --keep
 ```
 
+If the Docker build host cannot reach the default Go module proxy, override it for the demo API image build:
+
+```bash
+SHADIFF_E2E_GOPROXY=https://goproxy.cn,direct ./examples/e2e/run.sh --assert
+```
+
 The script writes isolated runtime data under:
 
 ```text
@@ -103,4 +109,5 @@ ssh <linux-user>@<linux-host> 'cd /path/to/shadiff && git fetch origin && git ch
 
 - Port conflicts: stop the process using the listed ports, or run on a clean development machine.
 - Docker networking: the API containers rely on `host.docker.internal:host-gateway`, which is supported by modern Docker Engine on Linux.
+- Go module downloads: set `SHADIFF_E2E_GOPROXY` when `go mod download` inside the API image build cannot reach `proxy.golang.org`.
 - Failed assertions: inspect `examples/e2e/.work/<run-id>/artifacts/diff.json` and the stage logs.

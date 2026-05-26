@@ -19,6 +19,7 @@
 - PostgreSQL uses `github.com/lib/pq`.
 - MongoDB uses `go.mongodb.org/mongo-driver/v2`.
 - The demo intentionally opens and closes database clients per request so Shadiff DB proxy shutdown is deterministic during scripted runs.
+- The Docker build accepts a `GOPROXY` build argument, surfaced by the E2E runner as `SHADIFF_E2E_GOPROXY`, for hosts that cannot reach the default Go module proxy.
 
 ## Operational Notes
 

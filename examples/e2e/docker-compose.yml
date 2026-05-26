@@ -45,6 +45,8 @@ services:
     build:
       context: ../..
       dockerfile: examples/e2e/api/Dockerfile
+      args:
+        GOPROXY: ${SHADIFF_E2E_GOPROXY:-https://proxy.golang.org,direct}
     environment:
       API_VARIANT: old
       HTTP_ADDR: :8080
@@ -72,6 +74,8 @@ services:
     build:
       context: ../..
       dockerfile: examples/e2e/api/Dockerfile
+      args:
+        GOPROXY: ${SHADIFF_E2E_GOPROXY:-https://proxy.golang.org,direct}
     environment:
       API_VARIANT: new
       HTTP_ADDR: :8080
