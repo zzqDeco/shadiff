@@ -44,5 +44,5 @@
 ## 7. Maintenance Notes
 - Consider comparing MongoDB query filters and update documents for deeper semantic analysis.
 - The positional pairing assumption may not hold if MongoDB operations are non-deterministically ordered; consider an unordered comparison mode or grouping by collection+operation.
-- The separation between `db.go` (SQL) and `mongo.go` (MongoDB) keeps concerns clean; maintain this separation for future NoSQL database support (e.g., Redis, DynamoDB).
-- Integration into `engine.go` requires calling `CompareMongoSideEffects` alongside `CompareDBSideEffects` within the side-effect comparison phase of `compareRecords`.
+- The separation between `db.go` (SQL), `mongo.go` (MongoDB), and `redis.go` (Redis) keeps database-specific comparison concerns isolated.
+- `engine.go` calls `CompareMongoSideEffects` alongside the SQL and Redis comparers within the side-effect comparison phase of `compareRecords`.

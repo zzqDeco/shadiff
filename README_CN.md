@@ -11,7 +11,7 @@ Shadiff 是一个影子流量语义对拍工具，用于跨框架/跨语言的 A
 ## 核心特性
 
 - **HTTP 反向代理录制** — 通过 `httputil.ReverseProxy` 透明采集流量，记录完整的请求/响应对及时间信息
-- **数据库协议代理** — TCP 级别黑盒采集，支持 MySQL（COM_QUERY）、PostgreSQL（Simple/Extended Query）和 MongoDB（OP_MSG Wire Protocol）
+- **数据库协议代理** — TCP 级别黑盒采集，支持 MySQL（COM_QUERY）、PostgreSQL（Simple/Extended Query）、MongoDB（OP_MSG Wire Protocol）和 Redis（RESP 命令）
 - **并发回放引擎** — 基于 Worker Pool 的回放，支持可配置的并发数，请求变换（host/header 替换）
 - **语义级 JSON 对比** — 递归结构化比较，支持路径追踪（如 `body.data.items[0].name`）
 - **可配置规则系统** — 支持忽略时间戳、UUID、数值容差、数组顺序等，通过 YAML 规则配置
@@ -61,7 +61,8 @@ shadiff/
 │   │       ├── hook.go                # DBHook 接口定义
 │   │       ├── mysql.go               # MySQL 协议代理（COM_QUERY 解析）
 │   │       ├── postgres.go            # PostgreSQL 协议代理（Simple/Extended Query）
-│   │       └── mongo.go               # MongoDB 协议代理（OP_MSG Wire Protocol）
+│   │       ├── mongo.go               # MongoDB 协议代理（OP_MSG Wire Protocol）
+│   │       └── redis.go               # Redis 协议代理（RESP 命令解析）
 │   ├── storage/                       # 存储层
 │   │   ├── store.go                   # SessionStore/RecordStore/DiffStore 接口
 │   │   └── filestore.go              # 文件系统实现（JSONL）
@@ -74,6 +75,7 @@ shadiff/
 │   │   ├── json.go                    # JSON 结构化递归 diff
 │   │   ├── db.go                      # SQL 数据库对比（MySQL/PostgreSQL）
 │   │   ├── mongo.go                   # MongoDB 操作对比
+│   │   ├── redis.go                   # Redis 命令对比
 │   │   └── rules.go                   # 对拍规则 + 内置匹配器
 │   ├── reporter/                      # 报告生成
 │   │   ├── reporter.go                # Reporter 接口 + 工厂
@@ -135,7 +137,7 @@ go test -v -tags integration ./internal/integration -count=1 -timeout=20m
 
 ### 官方 E2E Demo
 
-运行可复现的 Docker Compose demo，使用真实 CLI 跑完整 `record -> replay -> diff -> report`，并覆盖 HTTP、MySQL、PostgreSQL 和 MongoDB side effects：
+运行可复现的 Docker Compose demo，使用真实 CLI 跑完整 `record -> replay -> diff -> report`，并覆盖 HTTP、MySQL、PostgreSQL、MongoDB 和 Redis side effects：
 
 ```bash
 ./examples/e2e/run.sh --assert
@@ -164,10 +166,15 @@ shadiff record -D -t http://old-api:8080 -l :18080 -s "bg-session"
 shadiff record -t http://old-api:8080 -l :18080 \
   --db-proxy mongo://:27018->:27017 -s "mongo-migration"
 
+# 带 Redis 协议代理
+shadiff record -t http://old-api:8080 -l :18080 \
+  --db-proxy redis://:16379->:6379 -s "redis-migration"
+
 # 多数据库代理
 shadiff record -t http://old-api:8080 -l :18080 \
   --db-proxy mysql://:13306->:3306 \
-  --db-proxy mongo://:27018->:27017 -s "full-migration"
+  --db-proxy mongo://:27018->:27017 \
+  --db-proxy redis://:16379->:6379 -s "full-migration"
 ```
 
 将流量指向 `localhost:18080` 而非老 API。所有请求、响应和数据库操作都会被记录。
@@ -201,7 +208,7 @@ shadiff replay -s "migration-v1" -t http://new-api:9090 \
 
 当 replay 启用 `--db-proxy` 时，DB side effect 会写入 `replay-records.jsonl`，并且回放必须保持串行（`--concurrency 1`）。
 如果未传 `--db-proxy`，replay 会回退使用配置文件中的 `replay.dbProxies`。
-回放在每条请求窗口收口前也会先 flush DB-hook telemetry，让语义 diff 更稳定地拿到窗口内的 SQL 和 Mongo 副作用。
+回放在每条请求窗口收口前也会先 flush DB-hook telemetry，让语义 diff 更稳定地拿到窗口内的 SQL、Mongo 和 Redis 副作用。
 
 ### 3. 对比结果
 
@@ -345,7 +352,7 @@ CLI flag > config.json > 内置默认值
 
 `--db-proxy` 格式：`<type>://<listen_addr>-><target_addr>`
 
-支持类型：`mysql`、`postgres`、`mongo`，可多次指定。
+支持类型：`mysql`、`postgres`、`mongo`、`redis`，可多次指定。
 
 ## 文档
 

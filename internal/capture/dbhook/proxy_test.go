@@ -51,6 +51,14 @@ func buildMongoOpMsg(doc []byte) []byte {
 	return append(header, body...)
 }
 
+func buildRedisCommandWire(parts ...string) []byte {
+	rawParts := make([][]byte, 0, len(parts))
+	for _, part := range parts {
+		rawParts = append(rawParts, []byte(part))
+	}
+	return buildRedisArray(rawParts...)
+}
+
 func waitForSideEffect(t *testing.T, ch <-chan model.SideEffect) model.SideEffect {
 	t.Helper()
 
@@ -297,6 +305,63 @@ func TestMongoHook_HandleConn_ForwardsTrafficAndCapturesCommand(t *testing.T) {
 	}
 }
 
+func TestRedisHook_HandleConn_ForwardsTrafficAndCapturesCommand(t *testing.T) {
+	message := buildRedisCommandWire("SET", "user:1", "ada")
+	targetAddr, serverDone := startTargetServer(t, func(conn net.Conn) error {
+		buf := make([]byte, len(message))
+		if _, err := io.ReadFull(conn, buf); err != nil {
+			return err
+		}
+		if !bytes.Equal(buf, message) {
+			return fmt.Errorf("forwarded message = %v, want %v", buf, message)
+		}
+
+		_, err := conn.Write([]byte("+OK\r\n"))
+		return err
+	})
+
+	hook := NewRedisHook(":0", targetAddr)
+	proxyConn, clientConn := net.Pipe()
+	defer clientConn.Close()
+
+	handleDone := make(chan struct{})
+	go func() {
+		defer close(handleDone)
+		hook.handleConn(proxyConn)
+	}()
+
+	if _, err := clientConn.Write(message); err != nil {
+		t.Fatalf("Write() error: %v", err)
+	}
+	if err := clientConn.SetReadDeadline(time.Now().Add(time.Second)); err != nil {
+		t.Fatalf("SetReadDeadline() error: %v", err)
+	}
+	resp := make([]byte, 5)
+	if _, err := io.ReadFull(clientConn, resp); err != nil {
+		t.Fatalf("ReadFull() error: %v", err)
+	}
+	if string(resp) != "+OK\r\n" {
+		t.Fatalf("response = %q, want %q", string(resp), "+OK\\r\\n")
+	}
+	_ = clientConn.Close()
+
+	if err := <-serverDone; err != nil {
+		t.Fatalf("target server error: %v", err)
+	}
+	waitForHandleConn(t, handleDone)
+
+	effect := waitForSideEffect(t, hook.SideEffects())
+	if effect.RedisCommand != "SET" {
+		t.Fatalf("redis command = %q, want SET", effect.RedisCommand)
+	}
+	if effect.RedisKey != "user:1" {
+		t.Fatalf("redis key = %q, want user:1", effect.RedisKey)
+	}
+	if len(effect.RedisArgs) != 2 || effect.RedisArgs[0] != "user:1" || effect.RedisArgs[1] != "ada" {
+		t.Fatalf("redis args = %+v, want [user:1 ada]", effect.RedisArgs)
+	}
+}
+
 func TestPostgresHook_StartStopLifecycle(t *testing.T) {
 	hook := NewPostgresHook("127.0.0.1:0", "127.0.0.1:5432")
 	if err := hook.Start(context.Background()); err != nil {
@@ -309,6 +374,16 @@ func TestPostgresHook_StartStopLifecycle(t *testing.T) {
 
 func TestMongoHook_StartStopLifecycle(t *testing.T) {
 	hook := NewMongoHook("127.0.0.1:0", "127.0.0.1:27017")
+	if err := hook.Start(context.Background()); err != nil {
+		t.Fatalf("Start() error: %v", err)
+	}
+	if err := hook.Stop(); err != nil {
+		t.Fatalf("Stop() error: %v", err)
+	}
+}
+
+func TestRedisHook_StartStopLifecycle(t *testing.T) {
+	hook := NewRedisHook("127.0.0.1:0", "127.0.0.1:6379")
 	if err := hook.Start(context.Background()); err != nil {
 		t.Fatalf("Start() error: %v", err)
 	}

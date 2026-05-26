@@ -20,7 +20,7 @@
 - Structs/interfaces:
   - `AppConfig` -- Root configuration. Fields: `Capture` (CaptureConfig), `Replay` (ReplayConfig), `Diff` (DiffConfig), `Storage` (StorageConfig), `Log` (LogConfig).
   - `CaptureConfig` -- Fields: `ListenAddr` (default ":18080"), `MaxBodySize` (bytes), `ExcludePaths` (prefix list), `DBProxies` (slice of DBProxyConfig).
-  - `DBProxyConfig` -- Fields: `Type` (mysql/postgres/mongo), `ListenAddr`, `TargetAddr`.
+  - `DBProxyConfig` -- Fields: `Type` (mysql/postgres/mongo/redis), `ListenAddr`, `TargetAddr`.
   - `ReplayConfig` -- Fields: `Concurrency`, `Timeout` (duration string), `RetryCount`, `DelayMs`, `DBProxies` (slice of DBProxyConfig for replay-time DB side-effect capture).
   - `DiffConfig` -- Fields: `IgnoreHeaders`, `IgnoreOrder` (JSON array order), `MaxDiffs`, `Rules` (slice of Rule), `RulesFile` (external rules file path).
   - `Rule` -- Diff rule definition. Fields: `Name`, `Kind` (ignore/transform/custom), `Paths` (glob-capable JSON paths), `Pattern` (regex, optional), `Matcher` (custom matcher name, optional).

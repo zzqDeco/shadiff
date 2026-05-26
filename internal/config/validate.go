@@ -48,8 +48,8 @@ func Validate(cfg *AppConfig) error {
 
 func validateDBProxies(path string, proxies []DBProxyConfig) error {
 	for i, proxy := range proxies {
-		if proxy.Type != "mysql" && proxy.Type != "postgres" && proxy.Type != "mongo" {
-			return fmt.Errorf("%s[%d].type must be mysql, postgres, or mongo", path, i)
+		if proxy.Type != "mysql" && proxy.Type != "postgres" && proxy.Type != "mongo" && proxy.Type != "redis" {
+			return fmt.Errorf("%s[%d].type must be mysql, postgres, mongo, or redis", path, i)
 		}
 		if proxy.ListenAddr == "" {
 			return fmt.Errorf("%s[%d].listenAddr must not be empty", path, i)

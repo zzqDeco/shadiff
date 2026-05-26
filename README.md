@@ -11,7 +11,7 @@ Shadiff is a shadow traffic semantic comparison tool for cross-framework / cross
 ## Features
 
 - **HTTP Reverse Proxy Recording** — Transparent traffic capture via `httputil.ReverseProxy`, records full request/response pairs with timing
-- **Database Protocol Proxying** — TCP-level black-box capture for MySQL (COM_QUERY), PostgreSQL (Simple/Extended Query), and MongoDB (OP_MSG Wire Protocol)
+- **Database Protocol Proxying** — TCP-level black-box capture for MySQL (COM_QUERY), PostgreSQL (Simple/Extended Query), MongoDB (OP_MSG Wire Protocol), and Redis (RESP commands)
 - **Concurrent Replay Engine** — Worker pool-based replay with configurable concurrency, request transformation (host/header substitution)
 - **Semantic JSON Diff** — Recursive structural comparison with path tracking (e.g., `body.data.items[0].name`)
 - **Configurable Rule System** — Ignore timestamps, UUIDs, numeric tolerance, array ordering via YAML rules
@@ -61,7 +61,8 @@ shadiff/
 │   │       ├── hook.go                # DBHook interface definition
 │   │       ├── mysql.go               # MySQL protocol proxy (COM_QUERY parsing)
 │   │       ├── postgres.go            # PostgreSQL protocol proxy (Simple/Extended Query)
-│   │       └── mongo.go               # MongoDB protocol proxy (OP_MSG Wire Protocol)
+│   │       ├── mongo.go               # MongoDB protocol proxy (OP_MSG Wire Protocol)
+│   │       └── redis.go               # Redis protocol proxy (RESP command parsing)
 │   ├── storage/                       # Storage layer
 │   │   ├── store.go                   # SessionStore/RecordStore/DiffStore interfaces
 │   │   └── filestore.go              # Filesystem implementation (JSONL)
@@ -74,6 +75,7 @@ shadiff/
 │   │   ├── json.go                    # JSON structural recursive diff
 │   │   ├── db.go                      # SQL database diff (MySQL/PostgreSQL)
 │   │   ├── mongo.go                   # MongoDB operation diff
+│   │   ├── redis.go                   # Redis command diff
 │   │   └── rules.go                   # Diff rules + built-in matchers
 │   ├── reporter/                      # Report generation
 │   │   ├── reporter.go                # Reporter interface + factory
@@ -135,7 +137,7 @@ go test -v -tags integration ./internal/integration -count=1 -timeout=20m
 
 ### Official E2E Demo
 
-Run the reproducible Docker Compose demo to exercise the real CLI across `record -> replay -> diff -> report` with HTTP, MySQL, PostgreSQL, and MongoDB side effects:
+Run the reproducible Docker Compose demo to exercise the real CLI across `record -> replay -> diff -> report` with HTTP, MySQL, PostgreSQL, MongoDB, and Redis side effects:
 
 ```bash
 ./examples/e2e/run.sh --assert
@@ -164,10 +166,15 @@ shadiff record -D -t http://old-api:8080 -l :18080 -s "bg-session"
 shadiff record -t http://old-api:8080 -l :18080 \
   --db-proxy mongo://:27018->:27017 -s "mongo-migration"
 
+# With Redis protocol proxy
+shadiff record -t http://old-api:8080 -l :18080 \
+  --db-proxy redis://:16379->:6379 -s "redis-migration"
+
 # Multiple database proxies
 shadiff record -t http://old-api:8080 -l :18080 \
   --db-proxy mysql://:13306->:3306 \
-  --db-proxy mongo://:27018->:27017 -s "full-migration"
+  --db-proxy mongo://:27018->:27017 \
+  --db-proxy redis://:16379->:6379 -s "full-migration"
 ```
 
 Point your traffic to `localhost:18080` instead of the old API. All requests, responses, and database operations are recorded.
@@ -201,7 +208,7 @@ shadiff replay -s "migration-v1" -t http://new-api:9090 \
 
 When replay uses `--db-proxy`, DB side effects are captured into `replay-records.jsonl` and replay must stay serial (`--concurrency 1`).
 If `--db-proxy` is omitted, replay falls back to `replay.dbProxies` from the config file.
-Replay also flushes DB-hook telemetry before each request window is finalized so semantic diff sees in-window SQL and Mongo side effects more reliably.
+Replay also flushes DB-hook telemetry before each request window is finalized so semantic diff sees in-window SQL, Mongo, and Redis side effects more reliably.
 
 ### 3. Compare Results
 
@@ -345,7 +352,7 @@ All persistent data is stored under `~/.shadiff/`:
 
 `--db-proxy` format: `<type>://<listen_addr>-><target_addr>`
 
-Supported types: `mysql`, `postgres`, `mongo`. Can be specified multiple times.
+Supported types: `mysql`, `postgres`, `mongo`, `redis`. Can be specified multiple times.
 
 ## Documentation
 

@@ -227,3 +227,54 @@ func TestEngineRun_UsesMongoSideEffectComparer(t *testing.T) {
 		t.Fatalf("unexpected differences: %+v", results[0].Differences)
 	}
 }
+
+func TestEngineRun_UsesRedisSideEffectComparer(t *testing.T) {
+	store, session := newDiffStore(t)
+	if err := store.AppendRecord(session.ID, &model.Record{
+		ID:        "orig-1",
+		SessionID: session.ID,
+		Sequence:  1,
+		Request:   model.HTTPRequest{Method: "GET", Path: "/items"},
+		Response:  model.HTTPResponse{StatusCode: 200, Body: []byte(`{"ok":true}`)},
+		SideEffects: []model.SideEffect{{
+			Type:         model.SideEffectDB,
+			DBType:       "redis",
+			RedisCommand: "SET",
+			RedisKey:     "user:1",
+			RedisArgs:    []string{"user:1", "old"},
+		}},
+	}); err != nil {
+		t.Fatalf("AppendRecord() error: %v", err)
+	}
+	if err := store.AppendReplayRecord(session.ID, &model.Record{
+		ID:        "replay-1",
+		SessionID: session.ID,
+		Sequence:  1,
+		Request:   model.HTTPRequest{Method: "GET", Path: "/items"},
+		Response:  model.HTTPResponse{StatusCode: 200, Body: []byte(`{"ok":true}`)},
+		SideEffects: []model.SideEffect{{
+			Type:         model.SideEffectDB,
+			DBType:       "redis",
+			RedisCommand: "SET",
+			RedisKey:     "user:1",
+			RedisArgs:    []string{"user:1", "new"},
+		}},
+	}); err != nil {
+		t.Fatalf("AppendReplayRecord() error: %v", err)
+	}
+
+	engine := NewEngine(store, EngineConfig{SessionID: session.ID})
+	results, err := engine.Run()
+	if err != nil {
+		t.Fatalf("Run() error: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("len(results) = %d, want 1", len(results))
+	}
+	if results[0].Match {
+		t.Fatal("expected Redis side effect diff to break match")
+	}
+	if len(results[0].Differences) == 0 || results[0].Differences[0].Kind != model.DiffRedisCommand {
+		t.Fatalf("unexpected differences: %+v", results[0].Differences)
+	}
+}

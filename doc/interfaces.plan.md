@@ -26,7 +26,7 @@ Start an HTTP reverse proxy to record all requests, responses, and database side
 
 ```
 shadiff record -t http://localhost:8080 -l :18080 -s "user-module-migration"
-shadiff record -t http://old-api:8080 --db-proxy mysql://:13306->:3306
+shadiff record -t http://old-api:8080 --db-proxy mysql://:13306->:3306 --db-proxy redis://:16379->:6379
 ```
 
 | Flag | Short | Default | Required | Description |
@@ -34,7 +34,7 @@ shadiff record -t http://old-api:8080 --db-proxy mysql://:13306->:3306
 | `--target` | `-t` | | Yes | Target service address (e.g. `http://localhost:8080`) |
 | `--listen` | `-l` | `:18080` | No | Proxy listen address |
 | `--session` | `-s` | auto-generated (`record-YYYYMMDD-HHMMSS`) | No | Session name |
-| `--db-proxy` | | | No | DB proxy specification (repeatable, e.g. `mysql://:13306->:3306`) |
+| `--db-proxy` | | | No | DB proxy specification (repeatable, e.g. `mysql://:13306->:3306` or `redis://:16379->:6379`) |
 | `--duration` | `-d` | | No | Maximum recording duration (e.g. `30m`) |
 | `--daemon` | `-D` | `false` | No | Run as background daemon |
 
@@ -119,7 +119,7 @@ shadiff diff -s abc123 -o json --output-file diff.json --fail-on diff
 | `--output-file` | | | No | Write selected diff output format to a file instead of stdout |
 | `--fail-on` | | `none` | No | Failure policy: `none`, `diff`, or `error` |
 
-**Behavior**: Loads recorded and replayed records, pairs them by sequence number, reports replay failures explicitly, and compares status codes, response headers, JSON response bodies (structural diff), SQL side effects, and MongoDB side effects. Applies built-in and user-defined rules to mark expected differences as ignored. Saves results to `diff-results.json` and then renders either terminal output or JSON output based on `--output`. When `--output-file` is set, the selected output is written to that file and stdout receives a confirmation line. `--fail-on none` preserves compatibility and exits successfully after a completed diff, `--fail-on diff` returns a command error when any record has unignored differences, and `--fail-on error` returns a command error only when unignored error-severity differences exist.
+**Behavior**: Loads recorded and replayed records, pairs them by sequence number, reports replay failures explicitly, and compares status codes, response headers, JSON response bodies (structural diff), SQL side effects, MongoDB side effects, and Redis side effects. Applies built-in and user-defined rules to mark expected differences as ignored. Saves results to `diff-results.json` and then renders either terminal output or JSON output based on `--output`. When `--output-file` is set, the selected output is written to that file and stdout receives a confirmation line. `--fail-on none` preserves compatibility and exits successfully after a completed diff, `--fail-on diff` returns a command error when any record has unignored differences, and `--fail-on error` returns a command error only when unignored error-severity differences exist.
 
 ---
 
@@ -308,6 +308,7 @@ type DBHook interface {
 | `MySQLHook` | `"mysql"` | `mysql.go` | Parses MySQL packet format (3-byte length + 1-byte seq + payload); captures `COM_QUERY` (0x03) and `COM_STMT_PREPARE` (0x16) |
 | `PostgresHook` | `"postgres"` | `postgres.go` | Parses PostgreSQL frontend messages; captures Simple Query (`Q`) and Extended Query Parse (`P`) messages |
 | `MongoHook` | `"mongo"` | `mongo.go` | Parses MongoDB OP_MSG wire protocol (opcode 2013); extracts CRUD commands (find, insert, update, delete, aggregate, count, distinct, findAndModify) via simplified BSON parsing |
+| `RedisHook` | `"redis"` | `redis.go` | Parses Redis plaintext RESP array commands and inline commands; captures command, primary key, and redacted/encoded arguments |
 
 **Factory**: `NewHook(cfg Config) (DBHook, error)` dispatches on `cfg.DBType`.
 
@@ -409,7 +410,7 @@ DBHook.SideEffects()  -->  dbhook.Group  -->  Recorder.sideEffectCh / replay sid
                        Group.Flush(ctx) barrier
 ```
 
-1. Each `DBHook` implementation (MySQL, PostgreSQL, MongoDB) emits `model.SideEffect` values on a buffered channel (capacity 1000). If the channel is full, the side effect is dropped with a warning log.
+1. Each `DBHook` implementation (MySQL, PostgreSQL, MongoDB, Redis) emits `model.SideEffect` values on a buffered channel (capacity 1000). If the channel is full, the side effect is dropped with a warning log.
 2. `dbhook.Group` fans those events into a shared sink and exposes `Flush(ctx)` so capture/replay can wait for already-observed traffic to reach that sink before they close a request scope or replay window.
 3. The `Recorder` runs a background goroutine (`collectSideEffects`) that drains the capture sink and attributes each effect to the best matching request scope (mutex-protected).
 4. When `Recorder.FinishRequestScope()` is called (triggered by the HTTP proxy after each request/response round-trip), it drains collector backlog, attaches only the effects attributed to that request scope, then appends the complete record to storage.

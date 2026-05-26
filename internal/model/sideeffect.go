@@ -15,7 +15,7 @@ type SideEffect struct {
 	Duration  int64          `json:"duration"`  // Execution duration (ms)
 
 	// General DB fields
-	DBType string `json:"dbType,omitempty"` // mysql / postgres / mongo
+	DBType string `json:"dbType,omitempty"` // mysql / postgres / mongo / redis
 
 	// SQL databases (MySQL, PostgreSQL)
 	Query    string `json:"query,omitempty"`    // SQL statement
@@ -30,6 +30,11 @@ type SideEffect struct {
 	Update     any    `json:"update,omitempty"`     // Update operation
 	Documents  any    `json:"documents,omitempty"`  // Inserted documents
 	DocCount   int64  `json:"docCount,omitempty"`   // Affected/returned document count
+
+	// Redis-specific fields
+	RedisCommand string   `json:"redisCommand,omitempty"` // GET / SET / HSET / ...
+	RedisKey     string   `json:"redisKey,omitempty"`     // Primary key when identifiable
+	RedisArgs    []string `json:"redisArgs,omitempty"`    // Command arguments after redaction/encoding
 
 	// External HTTP call fields
 	HTTPReq  *HTTPRequest  `json:"httpReq,omitempty"`

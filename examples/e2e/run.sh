@@ -229,6 +229,7 @@ assert_demo() {
   grep -Eq '"diffCount": [1-9]' "${diff_json}" || fail "diff summary has no expected differences"
   grep -q '"kind": "db_query"' "${diff_json}" || fail "diff.json does not contain a SQL side-effect difference"
   grep -q '"kind": "mongo_op"' "${diff_json}" || fail "diff.json does not contain a MongoDB side-effect difference"
+  grep -q '"kind": "redis_command"' "${diff_json}" || fail "diff.json does not contain a Redis side-effect difference"
 }
 
 require_command docker
@@ -254,6 +255,7 @@ log "starting record stage"
   --db-proxy "mysql://:13306->127.0.0.1:33306" \
   --db-proxy "postgres://:15432->127.0.0.1:35432" \
   --db-proxy "mongo://:27018->127.0.0.1:37017" \
+  --db-proxy "redis://:16379->127.0.0.1:36379" \
   >"${WORK_DIR}/artifacts/record.log" 2>&1 &
 RECORD_PID=$!
 
@@ -271,6 +273,7 @@ log "starting replay stage"
   --db-proxy "mysql://:13316->127.0.0.1:33306" \
   --db-proxy "postgres://:15442->127.0.0.1:35432" \
   --db-proxy "mongo://:27028->127.0.0.1:37017" \
+  --db-proxy "redis://:16389->127.0.0.1:36379" \
   >"${WORK_DIR}/artifacts/replay.log" 2>&1 &
 REPLAY_PID=$!
 wait_log_marker "${WORK_DIR}/artifacts/replay.log" "Replay summary:" "${REPLAY_PID}" "replay stage" 60

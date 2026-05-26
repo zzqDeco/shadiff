@@ -176,6 +176,7 @@ func (e *Engine) compareRecords(original, replay model.Record) model.DiffResult 
 	// 4. Compare DB and Mongo side effects semantically.
 	diffs = append(diffs, CompareDBSideEffects(original.SideEffects, replay.SideEffects)...)
 	diffs = append(diffs, CompareMongoSideEffects(original.SideEffects, replay.SideEffects)...)
+	diffs = append(diffs, CompareRedisSideEffects(original.SideEffects, replay.SideEffects)...)
 
 	// 5. Compare residual non-DB side effect counts.
 	if otherOriginal, otherReplay := countResidualSideEffects(original.SideEffects), countResidualSideEffects(replay.SideEffects); otherOriginal != otherReplay {
@@ -219,7 +220,7 @@ func countResidualSideEffects(effects []model.SideEffect) int {
 			continue
 		}
 		switch effect.DBType {
-		case "mysql", "postgres", "mongo":
+		case "mysql", "postgres", "mongo", "redis":
 			continue
 		default:
 			count++

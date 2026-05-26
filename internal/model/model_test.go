@@ -304,6 +304,25 @@ func TestSideEffect_MongoFields(t *testing.T) {
 	}
 }
 
+func TestSideEffect_RedisFields(t *testing.T) {
+	se := SideEffect{
+		Type:         SideEffectDB,
+		DBType:       "redis",
+		RedisCommand: "SET",
+		RedisKey:     "user:1",
+		RedisArgs:    []string{"user:1", "ada"},
+	}
+	if se.RedisCommand != "SET" {
+		t.Errorf("RedisCommand = %q, want SET", se.RedisCommand)
+	}
+	if se.RedisKey != "user:1" {
+		t.Errorf("RedisKey = %q, want user:1", se.RedisKey)
+	}
+	if len(se.RedisArgs) != 2 || se.RedisArgs[0] != "user:1" || se.RedisArgs[1] != "ada" {
+		t.Errorf("RedisArgs = %+v, want [user:1 ada]", se.RedisArgs)
+	}
+}
+
 func TestSideEffect_HTTPFields(t *testing.T) {
 	req := &HTTPRequest{Method: "GET", Path: "/external"}
 	resp := &HTTPResponse{StatusCode: 200}
