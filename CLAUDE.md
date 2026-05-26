@@ -17,7 +17,7 @@ go test ./...                  # Run all tests
 
 ## Tech Stack
 
-- **Language:** Go 1.24
+- **Language:** Go 1.25
 - **CLI Framework:** Cobra
 - **Storage:** Filesystem (JSONL), ~/.shadiff/
 - **Logging:** slog + daily rotation

@@ -12,7 +12,7 @@ record -> replay -> diff -> report
 
 Primary stack:
 
-- Go 1.24
+- Go 1.25
 - Cobra for CLI commands
 - Filesystem-backed storage using JSONL under `~/.shadiff/`
 - `slog` with daily log rotation

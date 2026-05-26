@@ -1,4 +1,4 @@
-name: CI
+name: Integration
 
 on:
   push:
@@ -11,8 +11,8 @@ on:
       - dev
 
 jobs:
-  test:
-    name: Test and build
+  db-side-effects:
+    name: DB side-effect integration
     runs-on: ubuntu-latest
 
     steps:
@@ -28,8 +28,5 @@ jobs:
       - name: Download dependencies
         run: go mod download
 
-      - name: Run tests
-        run: go test ./...
-
-      - name: Build binary
-        run: go build -o shadiff .
+      - name: Run integration tests
+        run: go test -v -tags integration ./internal/integration -count=1 -timeout=20m

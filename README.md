@@ -22,7 +22,7 @@ Shadiff is a shadow traffic semantic comparison tool for cross-framework / cross
 
 | Technology | Version | Purpose |
 |------------|---------|---------|
-| Go | 1.24 | Primary language |
+| Go | 1.25 | Primary language |
 | Cobra | v1.9 | CLI framework |
 | slog | stdlib | Structured logging with daily rotation |
 | JSONL | - | Streaming record storage |
@@ -32,7 +32,7 @@ Shadiff is a shadow traffic semantic comparison tool for cross-framework / cross
 ```
 shadiff/
 ├── main.go                            # CLI entry point
-├── go.mod                             # Go 1.24 module
+├── go.mod                             # Go 1.25 module
 ├── CLAUDE.md                          # Developer guide
 ├── cmd/                               # CLI commands
 │   ├── root.go                        # Cobra root, global flags
@@ -94,7 +94,7 @@ shadiff/
 
 ### Prerequisites
 
-- **Go** >= 1.24
+- **Go** >= 1.25
 
 ### Installation
 
@@ -125,6 +125,12 @@ Release assets can be checked locally after building `dist/`:
 
 ```bash
 bash scripts/verify-release-assets.sh dist v0.1.1
+```
+
+Docker-backed database integration tests are opt-in and are not part of the default unit test command:
+
+```bash
+go test -v -tags integration ./internal/integration -count=1 -timeout=20m
 ```
 
 ## Usage
