@@ -177,7 +177,7 @@ func (g *Group) Stop() error {
 
 // Config is the common configuration for DB proxies
 type Config struct {
-	DBType     string // mysql / postgres / mongo
+	DBType     string // mysql / postgres / mongo / redis
 	ListenAddr string // proxy listen address
 	TargetAddr string // real DB address
 }
@@ -191,6 +191,8 @@ func NewHook(cfg Config) (DBHook, error) {
 		return NewPostgresHook(cfg.ListenAddr, cfg.TargetAddr), nil
 	case "mongo":
 		return NewMongoHook(cfg.ListenAddr, cfg.TargetAddr), nil
+	case "redis":
+		return NewRedisHook(cfg.ListenAddr, cfg.TargetAddr), nil
 	default:
 		return nil, &UnsupportedDBError{DBType: cfg.DBType}
 	}

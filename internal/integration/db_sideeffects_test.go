@@ -17,6 +17,7 @@ import (
 
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/lib/pq"
+	"github.com/redis/go-redis/v9"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -124,6 +125,43 @@ func TestMongoDBProxyCapturesRealCommands(t *testing.T) {
 	}
 }
 
+func TestRedisDBProxyCapturesRealCommands(t *testing.T) {
+	targetAddr := startRedis(t)
+	group, sink, proxyAddr := startDBProxy(t, "redis", targetAddr)
+
+	client := openRedis(t, proxyAddr)
+	defer closeRedis(t, client)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	const key = "shadiff:redis:integration"
+	if err := client.Set(ctx, key, "ada", 0).Err(); err != nil {
+		t.Fatalf("redis set through proxy failed: %v", err)
+	}
+	got, err := client.Get(ctx, key).Result()
+	if err != nil {
+		t.Fatalf("redis get through proxy failed: %v", err)
+	}
+	if got != "ada" {
+		t.Fatalf("redis get result = %q, want ada", got)
+	}
+
+	flushGroup(t, group)
+	setEffect := waitForEffect(t, sink, func(effect model.SideEffect) bool {
+		return effect.DBType == "redis" && effect.RedisCommand == "SET" && effect.RedisKey == key
+	})
+	if setEffect.Type != model.SideEffectDB {
+		t.Fatalf("effect type = %q, want %q", setEffect.Type, model.SideEffectDB)
+	}
+	getEffect := waitForEffect(t, sink, func(effect model.SideEffect) bool {
+		return effect.DBType == "redis" && effect.RedisCommand == "GET" && effect.RedisKey == key
+	})
+	if getEffect.Type != model.SideEffectDB {
+		t.Fatalf("effect type = %q, want %q", getEffect.Type, model.SideEffectDB)
+	}
+}
+
 func TestReplayDiffDetectsDBSideEffectDifference(t *testing.T) {
 	targetAddr := startMySQL(t)
 	group, sink, proxyAddr := startDBProxy(t, "mysql", targetAddr)
@@ -221,6 +259,104 @@ func TestReplayDiffDetectsDBSideEffectDifference(t *testing.T) {
 	}
 }
 
+func TestReplayDiffDetectsRedisSideEffectDifference(t *testing.T) {
+	targetAddr := startRedis(t)
+	group, sink, proxyAddr := startDBProxy(t, "redis", targetAddr)
+
+	client := openRedis(t, proxyAddr)
+	defer closeRedis(t, client)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := client.Set(r.Context(), "shadiff:redis:replay", "new", 0).Err(); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		time.Sleep(50 * time.Millisecond)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer server.Close()
+
+	store, err := storage.NewFileStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewFileStore() error: %v", err)
+	}
+
+	session := model.Session{
+		ID:     "redis-integration",
+		Name:   "redis-integration",
+		Status: model.SessionCompleted,
+	}
+	if err := store.Create(&session); err != nil {
+		t.Fatalf("Create() error: %v", err)
+	}
+
+	body := []byte(`{"ok":true}`)
+	original := model.Record{
+		ID:        "original",
+		SessionID: session.ID,
+		Sequence:  1,
+		Request: model.HTTPRequest{
+			Method:  http.MethodGet,
+			Path:    "/redis",
+			Headers: map[string][]string{},
+		},
+		Response: model.HTTPResponse{
+			StatusCode: http.StatusOK,
+			Headers:    map[string][]string{},
+			Body:       body,
+			BodyLen:    int64(len(body)),
+		},
+		SideEffects: []model.SideEffect{{
+			Type:         model.SideEffectDB,
+			DBType:       "redis",
+			RedisCommand: "SET",
+			RedisKey:     "shadiff:redis:record",
+			RedisArgs:    []string{"shadiff:redis:record", "old"},
+			Timestamp:    time.Now().UnixMilli(),
+		}},
+		RecordedAt: time.Now().UnixMilli(),
+	}
+	if err := store.AppendRecord(session.ID, &original); err != nil {
+		t.Fatalf("AppendRecord() error: %v", err)
+	}
+
+	replay := replayengine.NewEngine(store, replayengine.EngineConfig{
+		SessionID:    session.ID,
+		TargetURL:    server.URL,
+		Concurrency:  1,
+		Timeout:      10 * time.Second,
+		SideEffectCh: sink,
+		Flusher:      group,
+		FlushTimeout: 5 * time.Second,
+	})
+	replayResults, err := replay.Run()
+	if err != nil {
+		t.Fatalf("replay Run() error: %v", err)
+	}
+	if len(replayResults) != 1 {
+		t.Fatalf("replay result count = %d, want 1", len(replayResults))
+	}
+	if !recordHasRedisCommand(replayResults[0].Replayed, "SET", "shadiff:redis:replay") {
+		t.Fatalf("replay record missing Redis side effect: %+v", replayResults[0].Replayed.SideEffects)
+	}
+
+	diff := diffengine.NewEngine(store, diffengine.EngineConfig{SessionID: session.ID})
+	diffResults, err := diff.Run()
+	if err != nil {
+		t.Fatalf("diff Run() error: %v", err)
+	}
+	if len(diffResults) != 1 {
+		t.Fatalf("diff result count = %d, want 1", len(diffResults))
+	}
+	if diffResults[0].Match {
+		t.Fatal("expected Redis side-effect difference to break match")
+	}
+	if !hasRedisDifference(diffResults[0]) {
+		t.Fatalf("expected Redis difference, got %+v", diffResults[0].Differences)
+	}
+}
+
 func requireDocker(t *testing.T) {
 	t.Helper()
 
@@ -295,6 +431,23 @@ func startMongo(t *testing.T) string {
 	})
 	addr := mappedAddress(t, ctx, container, "27017/tcp")
 	waitForMongo(t, mongoURI(addr))
+	return addr
+}
+
+func startRedis(t *testing.T) string {
+	t.Helper()
+	requireDocker(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
+
+	container := startContainer(t, ctx, testcontainers.ContainerRequest{
+		Image:        "redis:7-alpine",
+		ExposedPorts: []string{"6379/tcp"},
+		WaitingFor:   wait.ForListeningPort("6379/tcp").WithStartupTimeout(2 * time.Minute),
+	})
+	addr := mappedAddress(t, ctx, container, "6379/tcp")
+	waitForRedis(t, addr)
 	return addr
 }
 
@@ -492,6 +645,25 @@ func waitForMongo(t *testing.T, uri string) {
 	t.Fatalf("mongo database not ready: %v", lastErr)
 }
 
+func waitForRedis(t *testing.T, addr string) {
+	t.Helper()
+
+	deadline := time.Now().Add(90 * time.Second)
+	var lastErr error
+	for time.Now().Before(deadline) {
+		client := redis.NewClient(&redis.Options{Addr: addr, Protocol: 2})
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		lastErr = client.Ping(ctx).Err()
+		cancel()
+		_ = client.Close()
+		if lastErr == nil {
+			return
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+	t.Fatalf("redis database not ready: %v", lastErr)
+}
+
 func openMongo(t *testing.T, uri string) *mongo.Client {
 	t.Helper()
 
@@ -506,6 +678,27 @@ func openMongo(t *testing.T, uri string) *mongo.Client {
 		t.Fatalf("mongo Ping() error: %v", err)
 	}
 	return client
+}
+
+func openRedis(t *testing.T, addr string) *redis.Client {
+	t.Helper()
+
+	client := redis.NewClient(&redis.Options{Addr: addr, Protocol: 2})
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := client.Ping(ctx).Err(); err != nil {
+		_ = client.Close()
+		t.Fatalf("redis Ping() error: %v", err)
+	}
+	return client
+}
+
+func closeRedis(t *testing.T, client *redis.Client) {
+	t.Helper()
+
+	if err := client.Close(); err != nil {
+		t.Logf("redis close: %v", err)
+	}
 }
 
 func disconnectMongo(t *testing.T, client *mongo.Client) {
@@ -539,9 +732,27 @@ func recordHasQuery(record model.Record, marker string) bool {
 	return false
 }
 
+func recordHasRedisCommand(record model.Record, command, key string) bool {
+	for _, effect := range record.SideEffects {
+		if effect.DBType == "redis" && effect.RedisCommand == command && effect.RedisKey == key {
+			return true
+		}
+	}
+	return false
+}
+
 func hasDBQueryDifference(result model.DiffResult) bool {
 	for _, difference := range result.Differences {
 		if difference.Kind == model.DiffDBQuery && !difference.Ignored {
+			return true
+		}
+	}
+	return false
+}
+
+func hasRedisDifference(result model.DiffResult) bool {
+	for _, difference := range result.Differences {
+		if difference.Kind == model.DiffRedisCommand && !difference.Ignored {
 			return true
 		}
 	}

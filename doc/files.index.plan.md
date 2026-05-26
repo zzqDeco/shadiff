@@ -113,6 +113,7 @@ Exclusions:
 | `internal/capture/dbhook/mysql.go` | `doc/src/internal/capture/dbhook/mysql.go.plan.md` | DB Hook Implementation | dbhook |
 | `internal/capture/dbhook/postgres.go` | `doc/src/internal/capture/dbhook/postgres.go.plan.md` | DB Hook Implementation | dbhook |
 | `internal/capture/dbhook/mongo.go` | `doc/src/internal/capture/dbhook/mongo.go.plan.md` | DB Hook Implementation | dbhook |
+| `internal/capture/dbhook/redis.go` | `doc/src/internal/capture/dbhook/redis.go.plan.md` | DB Hook Implementation | dbhook |
 
 ### internal/storage/
 
@@ -137,6 +138,7 @@ Exclusions:
 | `internal/diff/json.go` | `doc/src/internal/diff/json.go.plan.md` | JSON Differ | diff |
 | `internal/diff/db.go` | `doc/src/internal/diff/db.go.plan.md` | DB Diff | diff |
 | `internal/diff/mongo.go` | `doc/src/internal/diff/mongo.go.plan.md` | MongoDB Diff | diff |
+| `internal/diff/redis.go` | `doc/src/internal/diff/redis.go.plan.md` | Redis Diff | diff |
 | `internal/diff/rules.go` | `doc/src/internal/diff/rules.go.plan.md` | Diff Rules | diff |
 | `internal/diff/rule_loader.go` | `doc/src/internal/diff/rule_loader.go.plan.md` | Rule Loader | diff |
 
@@ -165,11 +167,11 @@ Exclusions:
 | model | 5 | 5 |
 | config | 3 | 3 |
 | capture | 2 | 2 |
-| dbhook | 4 | 4 |
+| dbhook | 5 | 5 |
 | storage | 2 | 2 |
 | replay | 3 | 3 |
-| diff | 6 | 6 |
+| diff | 7 | 7 |
 | reporter | 4 | 4 |
 | logger | 1 | 1 |
 | examples | 1 | 1 |
-| **Total** | **46** | **46** |
+| **Total** | **48** | **48** |

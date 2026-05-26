@@ -6,15 +6,16 @@ This demo runs a full Shadiff loop:
 record -> replay -> diff -> report
 ```
 
-Docker Compose starts five services:
+Docker Compose starts six services:
 
 - `old-api`: source API on `127.0.0.1:18081`
 - `new-api`: replay target API on `127.0.0.1:18082`
 - `mysql`: real MySQL on `127.0.0.1:33306`
 - `postgres`: real PostgreSQL on `127.0.0.1:35432`
 - `mongo`: real MongoDB on `127.0.0.1:37017`
+- `redis`: real Redis on `127.0.0.1:36379`
 
-The API response body is intentionally the same for old and new services. The database side effects intentionally differ so `shadiff diff` reports SQL and MongoDB differences.
+The API response body is intentionally the same for old and new services. The database side effects intentionally differ so `shadiff diff` reports SQL, MongoDB, and Redis differences.
 
 ## Requirements
 
@@ -77,6 +78,7 @@ Important artifacts:
 - report writes `report.html`
 - `diff.json` contains at least one `db_query` difference
 - `diff.json` contains at least one `mongo_op` difference
+- `diff.json` contains at least one `redis_command` difference
 
 This means HTTP response behavior stayed stable while database side effects changed.
 
@@ -90,12 +92,15 @@ This means HTTP response behavior stayed stable while database side effects chan
 | real MySQL | `127.0.0.1:33306` |
 | real PostgreSQL | `127.0.0.1:35432` |
 | real MongoDB | `127.0.0.1:37017` |
+| real Redis | `127.0.0.1:36379` |
 | record MySQL proxy | `:13306` |
 | record PostgreSQL proxy | `:15432` |
 | record MongoDB proxy | `:27018` |
+| record Redis proxy | `:16379` |
 | replay MySQL proxy | `:13316` |
 | replay PostgreSQL proxy | `:15442` |
 | replay MongoDB proxy | `:27028` |
+| replay Redis proxy | `:16389` |
 
 DB proxy listen addresses bind all host interfaces so containers can reach them through `host.docker.internal`. Run this demo only on a trusted development machine.
 

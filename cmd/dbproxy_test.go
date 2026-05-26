@@ -44,11 +44,11 @@ func (f *fakeDBHook) SideEffects() <-chan model.SideEffect {
 func (f *fakeDBHook) Type() string { return "fake" }
 
 func TestParseDBProxySpec(t *testing.T) {
-	proxy, err := parseDBProxySpec("mysql://:13306->127.0.0.1:3306")
+	proxy, err := parseDBProxySpec("redis://:16379->127.0.0.1:6379")
 	if err != nil {
 		t.Fatalf("parseDBProxySpec() error: %v", err)
 	}
-	if proxy.Type != "mysql" || proxy.ListenAddr != ":13306" || proxy.TargetAddr != "127.0.0.1:3306" {
+	if proxy.Type != "redis" || proxy.ListenAddr != ":16379" || proxy.TargetAddr != "127.0.0.1:6379" {
 		t.Fatalf("unexpected proxy: %+v", proxy)
 	}
 }

@@ -8,7 +8,7 @@
 | Type | CLI tool |
 | Name | **Shadiff** -- Shadow Traffic Semantic Diff Tool |
 | Language | Go 1.25 |
-| Source files | 45 production `.go` files plus 29 test files |
+| Source files | 48 production `.go` files plus 31 test files |
 | Business purpose | Validate behavioral consistency of cross-framework / cross-language API migrations through a black-box record-replay-diff workflow |
 
 Shadiff targets the scenario where a team is migrating or rewriting an API service (e.g., from Java Spring to Go, or from monolith to microservices). Instead of writing integration tests by hand, the operator points Shadiff at the old service, records live traffic (including database side effects), replays it against the new service, and gets a semantic diff report showing exactly what behaves differently.
@@ -108,9 +108,9 @@ Display version, commit hash, and build date.
 | **Models** | `internal/model/` | Domain types shared across all modules | `Session`, `Record`, `HTTPRequest`, `HTTPResponse`, `SideEffect`, `DiffResult`, `Difference`, `DiffSummary` |
 | **Config** | `internal/config/` | Configuration schema, defaults, file persistence | `AppConfig`, `CaptureConfig`, `DBProxyConfig`, `ReplayConfig`, `DiffConfig`, `StorageConfig`, `LogConfig`, `Store` |
 | **Capture** | `internal/capture/` | HTTP reverse proxy, request/response recording, side-effect aggregation | `Proxy`, `Recorder`, `responseRecorder` |
-| **DB Hooks** | `internal/capture/dbhook/` | TCP-level database protocol proxies for MySQL, PostgreSQL, MongoDB | `DBHook` (interface), `MySQLHook`, `PostgresHook`, `MongoHook`, `Config` |
+| **DB Hooks** | `internal/capture/dbhook/` | TCP-level database protocol proxies for MySQL, PostgreSQL, MongoDB, Redis | `DBHook` (interface), `MySQLHook`, `PostgresHook`, `MongoHook`, `RedisHook`, `Config` |
 | **Replay** | `internal/replay/` | Replay engine, concurrent worker pool, request transformation | `Engine`, `EngineConfig`, `WorkerPool`, `ReplayResult`, `TransformConfig`, `Transform()` |
-| **Diff** | `internal/diff/` | Semantic comparison engine: JSON, SQL, MongoDB, rule system | `Engine`, `JSONDiffer`, `RuleSet`, `Rule`, `Matcher`, `TimestampMatcher`, `UUIDMatcher`, `NumericToleranceMatcher` |
+| **Diff** | `internal/diff/` | Semantic comparison engine: JSON, SQL, MongoDB, Redis, rule system | `Engine`, `JSONDiffer`, `RuleSet`, `Rule`, `Matcher`, `TimestampMatcher`, `UUIDMatcher`, `NumericToleranceMatcher` |
 | **Reporter** | `internal/reporter/` | Multi-format report generation | `Reporter` (interface), `TerminalReporter`, `JSONReporter`, `HTMLReporter` |
 | **Storage** | `internal/storage/` | File-system storage with JSONL streaming and mutex-guarded access | `SessionStore`, `RecordStore`, `DiffStore` (interfaces), `FileStore` |
 | **Logger** | `internal/logger/` | Structured logging with domain-specific convenience methods | `Init()`, `Close()`, `CaptureEvent()`, `ReplayEvent()`, `DiffEvent()`, `DBHookEvent()` |

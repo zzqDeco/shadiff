@@ -20,7 +20,9 @@ const (
 	DiffDBQuery      DifferenceKind = "db_query"       // Database query difference
 	DiffDBQueryCount DifferenceKind = "db_query_count" // Query count difference
 	DiffMongoOp      DifferenceKind = "mongo_op"       // MongoDB operation difference
-	DiffExternalCall DifferenceKind = "external_call"  // External call difference
+	DiffRedisCommand DifferenceKind = "redis_command"  // Redis command difference
+	DiffRedisCount   DifferenceKind = "redis_command_count"
+	DiffExternalCall DifferenceKind = "external_call" // External call difference
 )
 
 // Severity represents the severity level of a difference
@@ -46,11 +48,11 @@ type Difference struct {
 
 // DiffSummary represents the comparison summary statistics
 type DiffSummary struct {
-	SessionID   string `json:"sessionID"`
-	TotalCount  int    `json:"totalCount"`  // Total record count
-	MatchCount  int    `json:"matchCount"`  // Match count
-	DiffCount   int    `json:"diffCount"`   // Difference count
-	ErrorCount  int    `json:"errorCount"`  // Error-level difference count
-	IgnoreCount int    `json:"ignoreCount"` // Ignored difference count
-	MatchRate   float64 `json:"matchRate"`  // Match rate (0-1)
+	SessionID   string  `json:"sessionID"`
+	TotalCount  int     `json:"totalCount"`  // Total record count
+	MatchCount  int     `json:"matchCount"`  // Match count
+	DiffCount   int     `json:"diffCount"`   // Difference count
+	ErrorCount  int     `json:"errorCount"`  // Error-level difference count
+	IgnoreCount int     `json:"ignoreCount"` // Ignored difference count
+	MatchRate   float64 `json:"matchRate"`   // Match rate (0-1)
 }
