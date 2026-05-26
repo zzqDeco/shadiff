@@ -6,12 +6,20 @@ import (
 	"shadiff/internal/model"
 )
 
+func testMongoSideEffect(database, collection, operation string) model.SideEffect {
+	return model.NewMongoSideEffect(model.MongoSideEffect{
+		Database:   database,
+		Collection: collection,
+		Operation:  operation,
+	}, 0)
+}
+
 func TestCompareMongoSideEffects_Equal(t *testing.T) {
 	original := []model.SideEffect{
-		{Type: model.SideEffectDB, DBType: "mongo", Collection: "users", Operation: "find", Database: "testdb"},
+		testMongoSideEffect("testdb", "users", "find"),
 	}
 	replay := []model.SideEffect{
-		{Type: model.SideEffectDB, DBType: "mongo", Collection: "users", Operation: "find", Database: "testdb"},
+		testMongoSideEffect("testdb", "users", "find"),
 	}
 
 	diffs := CompareMongoSideEffects(original, replay)
@@ -22,11 +30,11 @@ func TestCompareMongoSideEffects_Equal(t *testing.T) {
 
 func TestCompareMongoSideEffects_DifferentOperationCount(t *testing.T) {
 	original := []model.SideEffect{
-		{Type: model.SideEffectDB, DBType: "mongo", Collection: "users", Operation: "find", Database: "testdb"},
-		{Type: model.SideEffectDB, DBType: "mongo", Collection: "orders", Operation: "insert", Database: "testdb"},
+		testMongoSideEffect("testdb", "users", "find"),
+		testMongoSideEffect("testdb", "orders", "insert"),
 	}
 	replay := []model.SideEffect{
-		{Type: model.SideEffectDB, DBType: "mongo", Collection: "users", Operation: "find", Database: "testdb"},
+		testMongoSideEffect("testdb", "users", "find"),
 	}
 
 	diffs := CompareMongoSideEffects(original, replay)
@@ -47,10 +55,10 @@ func TestCompareMongoSideEffects_DifferentOperationCount(t *testing.T) {
 
 func TestCompareMongoSideEffects_DifferentCollection(t *testing.T) {
 	original := []model.SideEffect{
-		{Type: model.SideEffectDB, DBType: "mongo", Collection: "users", Operation: "find", Database: "testdb"},
+		testMongoSideEffect("testdb", "users", "find"),
 	}
 	replay := []model.SideEffect{
-		{Type: model.SideEffectDB, DBType: "mongo", Collection: "orders", Operation: "find", Database: "testdb"},
+		testMongoSideEffect("testdb", "orders", "find"),
 	}
 
 	diffs := CompareMongoSideEffects(original, replay)
@@ -74,10 +82,10 @@ func TestCompareMongoSideEffects_DifferentCollection(t *testing.T) {
 
 func TestCompareMongoSideEffects_DifferentOperation(t *testing.T) {
 	original := []model.SideEffect{
-		{Type: model.SideEffectDB, DBType: "mongo", Collection: "users", Operation: "find", Database: "testdb"},
+		testMongoSideEffect("testdb", "users", "find"),
 	}
 	replay := []model.SideEffect{
-		{Type: model.SideEffectDB, DBType: "mongo", Collection: "users", Operation: "insert", Database: "testdb"},
+		testMongoSideEffect("testdb", "users", "insert"),
 	}
 
 	diffs := CompareMongoSideEffects(original, replay)
@@ -98,10 +106,10 @@ func TestCompareMongoSideEffects_DifferentOperation(t *testing.T) {
 
 func TestCompareMongoSideEffects_DifferentDatabase(t *testing.T) {
 	original := []model.SideEffect{
-		{Type: model.SideEffectDB, DBType: "mongo", Collection: "users", Operation: "find", Database: "db1"},
+		testMongoSideEffect("db1", "users", "find"),
 	}
 	replay := []model.SideEffect{
-		{Type: model.SideEffectDB, DBType: "mongo", Collection: "users", Operation: "find", Database: "db2"},
+		testMongoSideEffect("db2", "users", "find"),
 	}
 
 	diffs := CompareMongoSideEffects(original, replay)
@@ -126,11 +134,11 @@ func TestCompareMongoSideEffects_DifferentDatabase(t *testing.T) {
 func TestCompareMongoSideEffects_FiltersNonMongo(t *testing.T) {
 	// Non-mongo side effects should be ignored
 	original := []model.SideEffect{
-		{Type: model.SideEffectDB, DBType: "mysql", Query: "SELECT 1"},
+		model.NewSQLSideEffect("mysql", "SELECT 1", 0),
 		{Type: model.SideEffectHTTP},
 	}
 	replay := []model.SideEffect{
-		{Type: model.SideEffectDB, DBType: "mysql", Query: "SELECT 1"},
+		model.NewSQLSideEffect("mysql", "SELECT 1", 0),
 		{Type: model.SideEffectHTTP},
 	}
 

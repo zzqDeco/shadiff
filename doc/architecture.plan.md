@@ -92,15 +92,17 @@ Stages are decoupled -- they can be run independently, at different times, even 
                        +-------------+
 ```
 
-DB hooks operate as TCP proxies that sit between the application and the real database. They:
+DB hooks operate as TCP proxies that sit between the application and the real database. A shared proxy lifecycle handles listener setup, bidirectional forwarding, active-connection tracking, and flush barriers; database-specific code is limited to stream parsers. They:
 
 1. Accept connections from the application's DB client.
 2. Establish a connection to the real database server.
 3. Forward all traffic bidirectionally (`io.Copy` for server-to-client).
-4. Sniff client-to-server traffic to extract query information.
-5. Emit `model.SideEffect` structs on a buffered channel.
+4. Sniff client-to-server traffic through a protocol parser to extract query/command information.
+5. Emit typed `model.SideEffect` structs on a buffered channel (`database.sql`, `database.mongo`, or `database.redis` payloads).
 6. The `Recorder`'s background goroutine drains this channel and attributes each effect to the best matching request scope by timestamp.
 7. When the HTTP record is finalized, only the effects attributed to that request scope are attached.
+
+Supported database type identifiers are centralized in `internal/dbtype`; config validation, hook construction, and diff comparer registration all use the same supported set.
 
 ### 2.3 Replay Phase
 
@@ -299,7 +301,7 @@ All three DB hooks follow the same architectural pattern: **transparent TCP prox
 - `Stop()` closes `done`, closes the listener, waits on `WaitGroup`, then closes the side-effect channel.
 - Channel capacity is 1000; overflow drops the event with a warning log (non-blocking send).
 - All hooks satisfy the `dbhook.DBHook` interface: `Start(ctx)`, `Flush(ctx)`, `Stop()`, `SideEffects()`, `Type()`.
-- The factory function `dbhook.NewHook(Config)` routes to the correct implementation by `DBType`.
+- The factory function `dbhook.NewHook(Config)` resolves `DBType` through the constructor registry aligned with `internal/dbtype`.
 
 ---
 

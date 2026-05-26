@@ -186,9 +186,9 @@ func (r *Recorder) assignSideEffect(effect model.SideEffect) {
 	if scope == nil {
 		logger.Warn("orphan side effect dropped",
 			"session", r.sessionID,
-			"db_type", effect.DBType,
+			"db_type", effect.DatabaseType(),
 			"timestamp", effect.Timestamp,
-			"query", effect.Query,
+			"query", sideEffectQuery(effect),
 		)
 		return
 	}
@@ -199,6 +199,13 @@ func (r *Recorder) assignSideEffect(effect model.SideEffect) {
 		"scope_id", scopeID,
 		"timestamp", effect.Timestamp,
 	)
+}
+
+func sideEffectQuery(effect model.SideEffect) string {
+	if sql := effect.SQL(); sql != nil {
+		return sql.Query
+	}
+	return ""
 }
 
 func (r *Recorder) findScopeForEffect(timestamp int64) (int64, *requestScope) {

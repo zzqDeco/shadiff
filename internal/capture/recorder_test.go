@@ -55,11 +55,7 @@ func TestSideEffectChan_ReturnsChannel(t *testing.T) {
 	}
 
 	// Verify the channel is writable by sending a side effect
-	se := model.SideEffect{
-		Type:   model.SideEffectDB,
-		DBType: "mysql",
-		Query:  "SELECT 1",
-	}
+	se := model.NewSQLSideEffect("mysql", "SELECT 1", 0)
 
 	select {
 	case ch <- se:
@@ -84,12 +80,7 @@ func TestFinishRequestScope_AttachesAttributedSideEffects(t *testing.T) {
 	defer r.Stop()
 
 	scopeID := r.BeginRequestScope(100)
-	r.SideEffectChan() <- model.SideEffect{
-		Type:      model.SideEffectDB,
-		DBType:    "mysql",
-		Query:     "SELECT 1",
-		Timestamp: 105,
-	}
+	r.SideEffectChan() <- model.NewSQLSideEffect("mysql", "SELECT 1", 105)
 
 	record := &model.Record{
 		ID:         "rec-1",
@@ -103,8 +94,8 @@ func TestFinishRequestScope_AttachesAttributedSideEffects(t *testing.T) {
 	if len(record.SideEffects) != 1 {
 		t.Fatalf("sideEffects len = %d, want 1", len(record.SideEffects))
 	}
-	if record.SideEffects[0].Query != "SELECT 1" {
-		t.Fatalf("side effect query = %q, want %q", record.SideEffects[0].Query, "SELECT 1")
+	if record.SideEffects[0].SQL().Query != "SELECT 1" {
+		t.Fatalf("side effect query = %q, want %q", record.SideEffects[0].SQL().Query, "SELECT 1")
 	}
 
 	records, err := store.ListRecords(session.ID)
@@ -126,18 +117,8 @@ func TestFinishRequestScope_OverlappingRequestsUseLatestMatchingScope(t *testing
 	firstScope := r.BeginRequestScope(100)
 	secondScope := r.BeginRequestScope(105)
 
-	r.SideEffectChan() <- model.SideEffect{
-		Type:      model.SideEffectDB,
-		DBType:    "mysql",
-		Query:     "SELECT before second",
-		Timestamp: 104,
-	}
-	r.SideEffectChan() <- model.SideEffect{
-		Type:      model.SideEffectDB,
-		DBType:    "mysql",
-		Query:     "SELECT after second",
-		Timestamp: 106,
-	}
+	r.SideEffectChan() <- model.NewSQLSideEffect("mysql", "SELECT before second", 104)
+	r.SideEffectChan() <- model.NewSQLSideEffect("mysql", "SELECT after second", 106)
 
 	firstRecord := &model.Record{ID: "rec-1", Sequence: 1, RecordedAt: 120}
 	secondRecord := &model.Record{ID: "rec-2", Sequence: 2, RecordedAt: 115}
@@ -149,10 +130,10 @@ func TestFinishRequestScope_OverlappingRequestsUseLatestMatchingScope(t *testing
 		t.Fatalf("FinishRequestScope(first) error: %v", err)
 	}
 
-	if len(firstRecord.SideEffects) != 1 || firstRecord.SideEffects[0].Query != "SELECT before second" {
+	if len(firstRecord.SideEffects) != 1 || firstRecord.SideEffects[0].SQL().Query != "SELECT before second" {
 		t.Fatalf("first record sideEffects = %#v, want first query only", firstRecord.SideEffects)
 	}
-	if len(secondRecord.SideEffects) != 1 || secondRecord.SideEffects[0].Query != "SELECT after second" {
+	if len(secondRecord.SideEffects) != 1 || secondRecord.SideEffects[0].SQL().Query != "SELECT after second" {
 		t.Fatalf("second record sideEffects = %#v, want second query only", secondRecord.SideEffects)
 	}
 }
@@ -167,12 +148,7 @@ func TestFinishRequestScope_DropsOrphanSideEffects(t *testing.T) {
 		t.Fatalf("FinishRequestScope(first) error: %v", err)
 	}
 
-	r.SideEffectChan() <- model.SideEffect{
-		Type:      model.SideEffectDB,
-		DBType:    "mysql",
-		Query:     "SELECT orphan",
-		Timestamp: 111,
-	}
+	r.SideEffectChan() <- model.NewSQLSideEffect("mysql", "SELECT orphan", 111)
 
 	secondScope := r.BeginRequestScope(120)
 	secondRecord := &model.Record{ID: "rec-2", Sequence: 2, RecordedAt: 130}
@@ -189,12 +165,7 @@ func TestStop_DrainsSideEffectsBeforeReturning(t *testing.T) {
 	_, _, r := newRecorderTestFixture(t)
 
 	scopeID := r.BeginRequestScope(100)
-	r.SideEffectChan() <- model.SideEffect{
-		Type:      model.SideEffectDB,
-		DBType:    "postgres",
-		Query:     "SELECT stop drain",
-		Timestamp: 105,
-	}
+	r.SideEffectChan() <- model.NewSQLSideEffect("postgres", "SELECT stop drain", 105)
 
 	r.Stop()
 

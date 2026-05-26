@@ -310,7 +310,7 @@ type DBHook interface {
 | `MongoHook` | `"mongo"` | `mongo.go` | Parses MongoDB OP_MSG wire protocol (opcode 2013); extracts CRUD commands (find, insert, update, delete, aggregate, count, distinct, findAndModify) via simplified BSON parsing |
 | `RedisHook` | `"redis"` | `redis.go` | Parses Redis plaintext RESP array commands and inline commands; captures command, primary key, and redacted/encoded arguments |
 
-**Factory**: `NewHook(cfg Config) (DBHook, error)` dispatches on `cfg.DBType`.
+**Factory**: `NewHook(cfg Config) (DBHook, error)` resolves `cfg.DBType` through the constructor registry backed by `internal/dbtype`.
 
 **Coordinator**: `dbhook.Group` fans multiple hook channels into a shared sink, exposes `Flush(ctx)` to wait for hook parsing plus forwarder drain, and exposes `Stop()` for grouped shutdown.
 
@@ -415,6 +415,24 @@ DBHook.SideEffects()  -->  dbhook.Group  -->  Recorder.sideEffectCh / replay sid
 3. The `Recorder` runs a background goroutine (`collectSideEffects`) that drains the capture sink and attributes each effect to the best matching request scope (mutex-protected).
 4. When `Recorder.FinishRequestScope()` is called (triggered by the HTTP proxy after each request/response round-trip), it drains collector backlog, attaches only the effects attributed to that request scope, then appends the complete record to storage.
 5. Replay uses the same flush-before-window-close pattern, but stores attributed effects in replay records instead of original capture records.
+
+Side effects are persisted as typed payloads. A database effect uses this v0.4.0 JSON shape:
+
+```json
+{
+  "type": "database",
+  "timestamp": 1700000000000,
+  "duration": 0,
+  "database": {
+    "type": "mysql",
+    "sql": {
+      "query": "SELECT 1"
+    }
+  }
+}
+```
+
+SQL databases use `database.sql`, MongoDB uses `database.mongo`, Redis uses `database.redis`, and external HTTP calls use `http`. The previous flat DB fields (`dbType`, `query`, `collection`, `redisCommand`, etc.) are not part of the v0.4.0 storage contract.
 
 ### 3.3 JSONL for Persistence
 

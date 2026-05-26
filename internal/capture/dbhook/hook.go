@@ -6,6 +6,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"shadiff/internal/dbtype"
 	"shadiff/internal/model"
 )
 
@@ -182,20 +183,19 @@ type Config struct {
 	TargetAddr string // real DB address
 }
 
+var hookConstructors = map[string]func(string, string) DBHook{
+	dbtype.MySQL:    func(listenAddr, targetAddr string) DBHook { return NewMySQLHook(listenAddr, targetAddr) },
+	dbtype.Postgres: func(listenAddr, targetAddr string) DBHook { return NewPostgresHook(listenAddr, targetAddr) },
+	dbtype.Mongo:    func(listenAddr, targetAddr string) DBHook { return NewMongoHook(listenAddr, targetAddr) },
+	dbtype.Redis:    func(listenAddr, targetAddr string) DBHook { return NewRedisHook(listenAddr, targetAddr) },
+}
+
 // NewHook creates the corresponding DB hook based on the type
 func NewHook(cfg Config) (DBHook, error) {
-	switch cfg.DBType {
-	case "mysql":
-		return NewMySQLHook(cfg.ListenAddr, cfg.TargetAddr), nil
-	case "postgres":
-		return NewPostgresHook(cfg.ListenAddr, cfg.TargetAddr), nil
-	case "mongo":
-		return NewMongoHook(cfg.ListenAddr, cfg.TargetAddr), nil
-	case "redis":
-		return NewRedisHook(cfg.ListenAddr, cfg.TargetAddr), nil
-	default:
-		return nil, &UnsupportedDBError{DBType: cfg.DBType}
+	if constructor, ok := hookConstructors[cfg.DBType]; ok {
+		return constructor(cfg.ListenAddr, cfg.TargetAddr), nil
 	}
+	return nil, &UnsupportedDBError{DBType: cfg.DBType}
 }
 
 // UnsupportedDBError represents an unsupported database type error

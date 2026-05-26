@@ -19,30 +19,30 @@
 - Structs/interfaces: None (package-level functions only).
 - Exported functions/methods:
   - `CompareMongoSideEffects(original, replay)` -- compares MongoDB side effects:
-    1. Filters both slices to include only `mongo` typed effects.
+    1. Filters both slices to include only `database.type == "mongo"` effects with a non-nil `database.mongo` payload.
     2. Compares operation counts.
     3. Pairs operations by order (index) and compares three fields:
        - `Collection` -- error severity if different.
        - `Operation` -- error severity if different.
        - `Database` -- warning severity if different (less critical).
 - Unexported functions/methods:
-  - `filterMongoEffects(effects)` -- filters side effects where `Type == SideEffectDB` and `DBType == "mongo"`.
+  - `filterMongoEffects(effects)` -- filters side effects where `Type == SideEffectDB`, database type is `mongo`, and the MongoDB payload is present.
 - Key behaviors:
   - Database name differences are treated as warnings (lower severity than collection/operation differences) since database routing may legitimately differ between environments.
   - Operations are compared positionally by index, same as the SQL comparator in `db.go`.
   - All differences use the `DiffMongoOp` kind constant.
 
 ## 5. Dependencies
-- Internal: `shadiff/internal/model` (for `SideEffect`, `Difference`, `DiffMongoOp`, `SideEffectDB`, severity constants)
+- Internal: `shadiff/internal/dbtype`, `shadiff/internal/model`
 - External:
   - Standard library: `fmt`.
 
 ## 6. Change Impact
-- Like `db.go`, this function is not currently called from `engine.go`'s `compareRecords`; integration would add MongoDB-level granularity to diff results.
+- `sideeffects.go` registers this comparer for engine-side record/replay comparison.
 - Changes to the comparison fields or severity levels affect how MongoDB operation differences are reported and whether they cause match failures.
 
 ## 7. Maintenance Notes
 - Consider comparing MongoDB query filters and update documents for deeper semantic analysis.
 - The positional pairing assumption may not hold if MongoDB operations are non-deterministically ordered; consider an unordered comparison mode or grouping by collection+operation.
 - The separation between `db.go` (SQL), `mongo.go` (MongoDB), and `redis.go` (Redis) keeps database-specific comparison concerns isolated.
-- `engine.go` calls `CompareMongoSideEffects` alongside the SQL and Redis comparers within the side-effect comparison phase of `compareRecords`.
+- `engine.go` reaches this comparer through `CompareSideEffects`.

@@ -45,6 +45,7 @@ shadiff/
 │   ├── session.go                     # shadiff session (list/show/delete)
 │   └── version.go                     # shadiff version
 ├── internal/
+│   ├── dbtype/                        # Supported DB proxy type registry
 │   ├── model/                         # Core data models
 │   │   ├── session.go                 # Recording session
 │   │   ├── record.go                  # Single behavior record (request+response+side effects)
@@ -59,6 +60,7 @@ shadiff/
 │   │   ├── recorder.go               # Unified recorder, assembles Record and persists
 │   │   └── dbhook/                    # Database protocol proxies
 │   │       ├── hook.go                # DBHook interface definition
+│   │       ├── tcp_proxy.go           # Shared transparent TCP proxy lifecycle
 │   │       ├── mysql.go               # MySQL protocol proxy (COM_QUERY parsing)
 │   │       ├── postgres.go            # PostgreSQL protocol proxy (Simple/Extended Query)
 │   │       ├── mongo.go               # MongoDB protocol proxy (OP_MSG Wire Protocol)
@@ -72,6 +74,7 @@ shadiff/
 │   │   └── transform.go              # Request transformation (host/header substitution)
 │   ├── diff/                          # Semantic diff engine
 │   │   ├── engine.go                  # Diff orchestrator, pairs records by sequence
+│   │   ├── sideeffects.go             # Side-effect comparer registry
 │   │   ├── json.go                    # JSON structural recursive diff
 │   │   ├── db.go                      # SQL database diff (MySQL/PostgreSQL)
 │   │   ├── mongo.go                   # MongoDB operation diff
@@ -353,6 +356,10 @@ All persistent data is stored under `~/.shadiff/`:
 `--db-proxy` format: `<type>://<listen_addr>-><target_addr>`
 
 Supported types: `mysql`, `postgres`, `mongo`, `redis`. Can be specified multiple times.
+
+## Side-effect Storage Note
+
+Starting with `v0.4.0`, database side effects use typed JSON payloads such as `database.sql`, `database.mongo`, and `database.redis`. Sessions recorded by `v0.3.x` and earlier used flat fields and are not migrated.
 
 ## Documentation
 

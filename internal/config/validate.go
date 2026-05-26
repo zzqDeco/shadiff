@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"shadiff/internal/dbtype"
 )
 
 // Validate checks whether the config contains supported and internally
@@ -48,8 +50,8 @@ func Validate(cfg *AppConfig) error {
 
 func validateDBProxies(path string, proxies []DBProxyConfig) error {
 	for i, proxy := range proxies {
-		if proxy.Type != "mysql" && proxy.Type != "postgres" && proxy.Type != "mongo" && proxy.Type != "redis" {
-			return fmt.Errorf("%s[%d].type must be mysql, postgres, mongo, or redis", path, i)
+		if !dbtype.IsSupported(proxy.Type) {
+			return fmt.Errorf("%s[%d].type must be one of %s", path, i, dbtype.Names())
 		}
 		if proxy.ListenAddr == "" {
 			return fmt.Errorf("%s[%d].listenAddr must not be empty", path, i)
