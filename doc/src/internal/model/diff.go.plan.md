@@ -23,7 +23,7 @@
   - `DiffSummary` -- Aggregate statistics. Fields: `SessionID`, `TotalCount`, `MatchCount`, `DiffCount`, `ErrorCount`, `IgnoreCount`, `MatchRate` (float64, 0-1).
 - Exported functions/methods: None. This file is purely type definitions.
 - Constants:
-  - `DifferenceKind`: `DiffStatusCode` ("status_code"), `DiffHeader` ("header"), `DiffBody` ("body"), `DiffBodyField` ("body_field"), `DiffDBQuery` ("db_query"), `DiffDBQueryCount` ("db_query_count"), `DiffMongoOp` ("mongo_op"), `DiffExternalCall` ("external_call").
+  - `DifferenceKind`: `DiffStatusCode` ("status_code"), `DiffHeader` ("header"), `DiffBody` ("body"), `DiffBodyField` ("body_field"), `DiffDBQuery` ("db_query"), `DiffDBQueryCount` ("db_query_count"), `DiffMongoOp` ("mongo_op"), `DiffRedisCommand` ("redis_command"), `DiffRedisCount` ("redis_command_count"), `DiffExternalCall` ("external_call").
   - `Severity`: `SeverityError` ("error"), `SeverityWarning` ("warning"), `SeverityInfo` ("info").
 
 ## 5. Dependencies

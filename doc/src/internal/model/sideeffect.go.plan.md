@@ -13,7 +13,7 @@
 - Changes to this file should be kept in sync with project-level documentation.
 
 ## 3. Inputs & Outputs
-- Input sources: Populated by database proxy hooks (MySQL, PostgreSQL, MongoDB) and external HTTP call interceptors during traffic capture.
+- Input sources: Populated by database proxy hooks (MySQL, PostgreSQL, MongoDB, Redis) and external HTTP call interceptors during traffic capture.
 - Output results: Stored as part of `Record.SideEffects`; consumed by the diff engine to detect behavioral differences in database queries and external calls between recorded and replayed runs.
 
 ## 4. Key Implementation Details
@@ -22,6 +22,7 @@
     - Shared: `Type` (SideEffectType), `Timestamp` (Unix ms), `Duration` (ms).
     - SQL databases (MySQL/PostgreSQL): `DBType`, `Query`, `Args` ([]any), `RowCount`.
     - MongoDB: `Database`, `Collection`, `Operation` (find/insert/update/delete/aggregate), `Filter`, `Update`, `Documents`, `DocCount`.
+    - Redis: `RedisCommand`, `RedisKey`, `RedisArgs`.
     - External HTTP: `HTTPReq` (*HTTPRequest), `HTTPResp` (*HTTPResponse).
 - Exported functions/methods: None. This file is purely type definitions.
 - Constants:
@@ -34,11 +35,12 @@
 
 ## 6. Change Impact
 - Changes affect `Record` (record.go) since records contain a `SideEffect` slice.
-- Diff engine logic that compares side effects (db_query, mongo_op, external_call difference kinds in diff.go) depends on these field names and types.
+- Diff engine logic that compares side effects (db_query, mongo_op, redis_command, external_call difference kinds in diff.go) depends on these field names and types.
 - Adding new `SideEffectType` values requires corresponding diff logic and capture hook implementations.
 
 ## 7. Maintenance Notes
 - The struct uses a flat union approach with `omitempty` on all type-specific fields. Only populate fields relevant to the `Type` value.
 - MongoDB fields (`Filter`, `Update`, `Documents`) use `any` type to accommodate arbitrary BSON-to-JSON conversions.
+- Redis arguments are already normalized, base64-encoded when non-UTF-8, and redacted for known credential-bearing commands before they reach the model.
 - `HTTPReq` and `HTTPResp` are pointers to allow nil when the side effect is not an HTTP call; always nil-check before access.
 - When adding a new side effect type (e.g., message queue, cache), add a new `SideEffectType` constant and extend the struct with new `omitempty` fields.

@@ -59,13 +59,13 @@ func TestValidate_InvalidValues(t *testing.T) {
 		{
 			name: "bad db type",
 			mutate: func(cfg *AppConfig) {
-				cfg.Capture.DBProxies = []DBProxyConfig{{Type: "redis", ListenAddr: ":1", TargetAddr: ":2"}}
+				cfg.Capture.DBProxies = []DBProxyConfig{{Type: "sqlite", ListenAddr: ":1", TargetAddr: ":2"}}
 			},
 		},
 		{
 			name: "bad replay db type",
 			mutate: func(cfg *AppConfig) {
-				cfg.Replay.DBProxies = []DBProxyConfig{{Type: "redis", ListenAddr: ":1", TargetAddr: ":2"}}
+				cfg.Replay.DBProxies = []DBProxyConfig{{Type: "sqlite", ListenAddr: ":1", TargetAddr: ":2"}}
 			},
 		},
 		{
@@ -84,5 +84,15 @@ func TestValidate_InvalidValues(t *testing.T) {
 				t.Fatal("expected validation error")
 			}
 		})
+	}
+}
+
+func TestValidate_RedisDBProxies(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.Capture.DBProxies = []DBProxyConfig{{Type: "redis", ListenAddr: ":16379", TargetAddr: "127.0.0.1:6379"}}
+	cfg.Replay.DBProxies = []DBProxyConfig{{Type: "redis", ListenAddr: ":16389", TargetAddr: "127.0.0.1:6379"}}
+
+	if err := Validate(cfg); err != nil {
+		t.Fatalf("Validate() error = %v, want nil", err)
 	}
 }

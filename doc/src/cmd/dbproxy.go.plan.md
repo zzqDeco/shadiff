@@ -28,7 +28,7 @@
 - Main helpers:
   - `resolveRecordDBProxies(...)` implements precedence: if the flag changed, parse CLI values; otherwise clone config values.
   - `resolveReplayDBProxies(...)` implements precedence: if the flag changed, parse CLI values; otherwise clone `cfg.Replay.DBProxies`.
-  - `parseDBProxySpec(spec string)` parses strings like `mysql://:13306->127.0.0.1:3306`.
+  - `parseDBProxySpec(spec string)` parses strings like `mysql://:13306->127.0.0.1:3306` or `redis://:16379->127.0.0.1:6379`.
   - `startDBHooks(...)` constructs each hook, starts it, and returns a `dbhook.Group` that owns side-effect fan-in plus flush/drain coordination into the provided sink channel.
   - `stopDBHooks(...)` best-effort stops any grouped hook owner that implements `Stop() error`.
 - Testability:

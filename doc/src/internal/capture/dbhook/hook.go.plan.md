@@ -15,7 +15,7 @@
 
 ## 3. Inputs & Outputs
 - Input sources:
-  - `Config` struct containing the database type (`mysql`, `postgres`, `mongo`), the proxy listen address, and the real database target address.
+  - `Config` struct containing the database type (`mysql`, `postgres`, `mongo`, `redis`), the proxy listen address, and the real database target address.
 - Output results:
   - A `DBHook` implementation matching the requested database type, or an `*UnsupportedDBError` if the type is not recognized.
   - A `Group` value that can coordinate a shared flush barrier across multiple started hooks.
@@ -33,7 +33,7 @@
   - `Config` -- Configuration struct with fields `DBType`, `ListenAddr`, and `TargetAddr`.
   - `UnsupportedDBError` -- Custom error type for unrecognized database types; implements the `error` interface.
 - Exported functions/methods:
-  - `NewHook(cfg Config) (DBHook, error)` -- Factory function that switches on `cfg.DBType` and delegates to `NewMySQLHook`, `NewPostgresHook`, or `NewMongoHook`.
+  - `NewHook(cfg Config) (DBHook, error)` -- Factory function that switches on `cfg.DBType` and delegates to `NewMySQLHook`, `NewPostgresHook`, `NewMongoHook`, or `NewRedisHook`.
   - `NewGroup(ctx, hooks, sink)` -- Starts grouped side-effect forwarders for already-started hooks.
 - Key behaviors:
   - The factory pattern centralizes hook creation, making it easy to add new database types by adding a case to the switch statement.
@@ -44,12 +44,12 @@
 ## 5. Dependencies
 - Internal:
   - `shadiff/internal/model` -- `SideEffect` type used in the `DBHook` interface's channel signature.
-  - (Indirectly) `mysql.go`, `postgres.go`, `mongo.go` in the same package -- implementations created by `NewHook`.
+  - (Indirectly) `mysql.go`, `postgres.go`, `mongo.go`, `redis.go` in the same package -- implementations created by `NewHook`.
 - External:
   - `context` -- Used in the `Start` method signature for cancellation support.
 
 ## 6. Change Impact
-- All `DBHook` implementations (`MySQLHook`, `PostgresHook`, `MongoHook`) must conform to this interface; adding or changing methods here requires updating all three.
+- All `DBHook` implementations (`MySQLHook`, `PostgresHook`, `MongoHook`, `RedisHook`) must conform to this interface; adding or changing methods here requires updating all four.
 - Any code that calls `NewHook` or `NewGroup` (typically command startup/wiring code) is affected by changes to `Config`, hook lifecycle, or sink expectations.
 - `Recorder.SideEffectChan()` and replay-side sinks consume the channels returned by `SideEffects()` via `Group`.
 

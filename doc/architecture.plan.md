@@ -195,7 +195,7 @@ DB hooks operate as TCP proxies that sit between the application and the real da
      - Array diff: ordered (index-by-index) or unordered (best-match pairing).
      - Scalar diff: type-aware with numeric type coercion.
      - Non-JSON bodies fall back to byte-level comparison.
-   - **Side effects**: semantic SQL and MongoDB comparison, plus residual non-DB side-effect count fallback.
+   - **Side effects**: semantic SQL, MongoDB, and Redis comparison, plus residual non-DB side-effect count fallback.
 5. The `RuleSet` is applied to all differences:
    - `ignore` rules: mark matching paths as ignored (e.g., timestamp fields).
    - `custom` rules: invoke `Matcher` implementations (timestamp, UUID, numeric tolerance).
@@ -264,7 +264,14 @@ All three DB hooks follow the same architectural pattern: **transparent TCP prox
 - **Recognized CRUD commands**: `find`, `insert`, `update`, `delete`, `aggregate`, `count`, `distinct`, `findAndModify`
 - **Extracted fields**: `$db` (database), collection name (from command value), `filter`, `updates`, `documents`
 
-### 3.4 Common Hook Architecture
+### 3.4 Redis Hook (`RedisHook`)
+
+- **Protocol**: Redis Serialization Protocol over plaintext TCP
+- **Captured commands**: RESP array commands and inline commands
+- **Extracted fields**: normalized command name, first primary key when identifiable, and redacted/encoded argument list
+- **Limitations**: does not terminate TLS or implement Redis Cluster routing awareness
+
+### 3.5 Common Hook Architecture
 
 ```
   net.Listen(listenAddr)
@@ -291,7 +298,7 @@ All three DB hooks follow the same architectural pattern: **transparent TCP prox
 - Each hook has a `done` channel for graceful shutdown.
 - `Stop()` closes `done`, closes the listener, waits on `WaitGroup`, then closes the side-effect channel.
 - Channel capacity is 1000; overflow drops the event with a warning log (non-blocking send).
-- All hooks satisfy the `dbhook.DBHook` interface: `Start(ctx)`, `Stop()`, `SideEffects()`, `Type()`.
+- All hooks satisfy the `dbhook.DBHook` interface: `Start(ctx)`, `Flush(ctx)`, `Stop()`, `SideEffects()`, `Type()`.
 - The factory function `dbhook.NewHook(Config)` routes to the correct implementation by `DBType`.
 
 ---

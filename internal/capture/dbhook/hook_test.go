@@ -83,8 +83,25 @@ func TestNewHook_Mongo(t *testing.T) {
 	}
 }
 
-func TestNewHook_Unsupported(t *testing.T) {
+func TestNewHook_Redis(t *testing.T) {
 	cfg := Config{DBType: "redis", ListenAddr: ":16379", TargetAddr: "127.0.0.1:6379"}
+	hook, err := NewHook(cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if hook == nil {
+		t.Fatal("expected non-nil hook")
+	}
+	if _, ok := hook.(*RedisHook); !ok {
+		t.Fatalf("expected *RedisHook, got %T", hook)
+	}
+	if hook.Type() != "redis" {
+		t.Fatalf("expected type %q, got %q", "redis", hook.Type())
+	}
+}
+
+func TestNewHook_Unsupported(t *testing.T) {
+	cfg := Config{DBType: "sqlite", ListenAddr: ":15433", TargetAddr: "127.0.0.1:5432"}
 	hook, err := NewHook(cfg)
 	if hook != nil {
 		t.Fatal("expected nil hook for unsupported type")
@@ -97,11 +114,11 @@ func TestNewHook_Unsupported(t *testing.T) {
 	if !errors.As(err, &unsupErr) {
 		t.Fatalf("expected *UnsupportedDBError, got %T", err)
 	}
-	if unsupErr.DBType != "redis" {
-		t.Fatalf("expected DBType %q, got %q", "redis", unsupErr.DBType)
+	if unsupErr.DBType != "sqlite" {
+		t.Fatalf("expected DBType %q, got %q", "sqlite", unsupErr.DBType)
 	}
 
-	expectedMsg := "unsupported database type: redis"
+	expectedMsg := "unsupported database type: sqlite"
 	if err.Error() != expectedMsg {
 		t.Fatalf("expected error message %q, got %q", expectedMsg, err.Error())
 	}

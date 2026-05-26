@@ -13,6 +13,7 @@ import (
 
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/lib/pq"
+	"github.com/redis/go-redis/v9"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
@@ -24,6 +25,7 @@ type appConfig struct {
 	mysqlDSN    string
 	postgresDSN string
 	mongoURI    string
+	redisAddr   string
 }
 
 type userResponse struct {
@@ -40,6 +42,7 @@ func main() {
 		mysqlDSN:    os.Getenv("MYSQL_DSN"),
 		postgresDSN: os.Getenv("POSTGRES_DSN"),
 		mongoURI:    os.Getenv("MONGO_URI"),
+		redisAddr:   os.Getenv("REDIS_ADDR"),
 	}
 
 	if err := cfg.validate(); err != nil {
@@ -74,6 +77,9 @@ func (cfg appConfig) validate() error {
 	if cfg.mongoURI == "" {
 		return errors.New("MONGO_URI is required")
 	}
+	if cfg.redisAddr == "" {
+		return errors.New("REDIS_ADDR is required")
+	}
 	return nil
 }
 
@@ -98,6 +104,10 @@ func (cfg appConfig) handleUser(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := cfg.queryMongo(ctx); err != nil {
 		http.Error(w, "mongo query failed: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if err := cfg.queryRedis(ctx); err != nil {
+		http.Error(w, "redis query failed: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -165,6 +175,22 @@ func (cfg appConfig) queryMongo(ctx context.Context) error {
 		Name string `bson:"name"`
 	}
 	return client.Database("shadiff").Collection(collection).FindOne(ctx, bson.D{{Key: "id", Value: 1}}).Decode(&doc)
+}
+
+func (cfg appConfig) queryRedis(ctx context.Context) error {
+	client := redis.NewClient(&redis.Options{
+		Addr:     cfg.redisAddr,
+		Protocol: 2,
+	})
+	defer client.Close()
+
+	key := "shadiff:e2e:old:user:1"
+	value := "old-cache-hit"
+	if cfg.variant == "new" {
+		key = "shadiff:e2e:new:user:1"
+		value = "new-cache-hit"
+	}
+	return client.Set(ctx, key, value, 0).Err()
 }
 
 func env(key, fallback string) string {
