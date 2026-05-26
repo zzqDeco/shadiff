@@ -4,11 +4,11 @@
 
 | Metric | Count |
 |---|---|
-| Total source files (non-test `.go`) | 45 |
+| Total source files (non-test `.go`) | 46 |
 | Test files (`*_test.go`) | 29 |
-| Project tooling files | 4 |
+| Project tooling files | 10 |
 | Project-level docs (`doc/*.md`) | 6 |
-| File-level docs (`doc/src/**/*.plan.md`) | 45 |
+| File-level docs (`doc/src/**/*.plan.md`) | 46 |
 | Project-level coverage | 100% |
 | File-level coverage | 100% |
 
@@ -29,7 +29,8 @@
 | reporter | `internal/reporter/` | 4 | 1 | 4 | 100% |
 | logger | `internal/logger/` | 1 | 2 | 1 | 100% |
 | integration | `internal/integration/` | 0 | 1 | 0 | n/a |
-| **Total** | | **45** | **29** | **45** | **100%** |
+| examples | `examples/e2e/api/` | 1 | 0 | 1 | 100% |
+| **Total** | | **46** | **29** | **46** | **100%** |
 
 ## File Types Breakdown
 
@@ -37,7 +38,10 @@
 |---|---|---|
 | Entry Point | 1 | `main.go` |
 | Release Tooling | 1 | `scripts/verify-release-assets.sh` |
+| Demo Tooling | 3 | `examples/e2e/api/Dockerfile`, `examples/e2e/docker-compose.yml`, `examples/e2e/run.sh` |
+| Demo Data Initialization | 3 | `examples/e2e/init/mongo.js`, `examples/e2e/init/mysql.sql`, `examples/e2e/init/postgres.sql` |
 | GitHub Actions Workflows | 3 | `.github/workflows/ci.yml`, `.github/workflows/integration.yml`, `.github/workflows/release.yml` |
+| Demo API | 1 | `examples/e2e/api/main.go` |
 | CLI Command / Helper | 11 | `cmd/root.go`, `cmd/version.go`, `cmd/session.go`, `cmd/runtime.go`, `cmd/dbproxy.go`, `cmd/record.go`, `cmd/record_stop.go`, `cmd/record_status.go`, `cmd/replay.go`, `cmd/diff.go`, `cmd/report.go` |
 | Data Model | 5 | `internal/model/session.go`, `internal/model/record.go`, `internal/model/request.go`, `internal/model/sideeffect.go`, `internal/model/diff.go` |
 | Configuration | 3 | `internal/config/config.go`, `internal/config/store.go`, `internal/config/validate.go` |
@@ -45,7 +49,7 @@
 | Daemon Management | 3 | `internal/daemon/pidfile.go`, `internal/daemon/process_unix.go`, `internal/daemon/process_windows.go` |
 | Capture / Diff / Replay / Storage Implementation | 18 | `internal/capture/proxy.go`, `internal/capture/recorder.go`, `internal/capture/dbhook/mysql.go`, `internal/capture/dbhook/postgres.go`, `internal/capture/dbhook/mongo.go`, `internal/storage/filestore.go`, `internal/replay/engine.go`, `internal/replay/worker.go`, `internal/replay/transform.go`, `internal/diff/engine.go`, `internal/diff/json.go`, `internal/diff/db.go`, `internal/diff/mongo.go`, `internal/diff/rules.go`, `internal/diff/rule_loader.go`, `internal/reporter/terminal.go`, `internal/reporter/json.go`, `internal/reporter/html.go` |
 | Logger | 1 | `internal/logger/logger.go` |
-| **Total** | **45** | |
+| **Total** | **46** | |
 
 ## Excluded Directories
 
@@ -68,5 +72,5 @@ The following directories and file patterns are excluded from the documentation 
 | Daemon support docs added | 2026-03-04 |
 | Config runtime docs synchronized | 2026-03-09 |
 | Test inventory and file coverage refreshed | 2026-03-09 |
-| Release and integration tooling inventory added | 2026-05-26 |
+| Official E2E demo inventory added | 2026-05-26 |
 | Last updated | 2026-05-26 |

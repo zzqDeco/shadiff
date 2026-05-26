@@ -3,6 +3,7 @@ build/bin/
 dist/
 shadiff
 shadiff.exe
+examples/e2e/.work/
 
 # Logs
 logs/
