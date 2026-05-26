@@ -21,6 +21,7 @@
 | `plan/diff-ci-output.plan.md` | Make `shadiff diff` produce stable machine-readable output and CI-friendly exit codes | Completed |
 | `plan/ci-release-automation.plan.md` | Add GitHub Actions CI checks and cross-platform release asset automation | Completed |
 | `plan/v0.1.1-stability.plan.md` | Harden release automation and add Docker-backed DB side-effect integration coverage | Completed |
+| `plan/v0.2.0-e2e-usability.plan.md` | Add an official reproducible E2E demo across HTTP and DB side effects | In Progress |
 
 ## Phase History
 

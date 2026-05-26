@@ -30,6 +30,18 @@ Exclusions:
 |---|---|---|---|
 | `main.go` | `doc/src/main.go.plan.md` | Entry Point | root |
 
+### examples/e2e/
+
+| Source File | Doc File | File Type | Module |
+|---|---|---|---|
+| `examples/e2e/api/main.go` | `doc/src/examples/e2e/api/main.go.plan.md` | Demo API | examples |
+| `examples/e2e/api/Dockerfile` | - | Demo Tooling | examples |
+| `examples/e2e/docker-compose.yml` | - | Demo Tooling | examples |
+| `examples/e2e/init/mongo.js` | - | Demo Data Initialization | examples |
+| `examples/e2e/init/mysql.sql` | - | Demo Data Initialization | examples |
+| `examples/e2e/init/postgres.sql` | - | Demo Data Initialization | examples |
+| `examples/e2e/run.sh` | - | Demo Tooling | examples |
+
 ### scripts/
 
 | Source File | Doc File | File Type | Module |
@@ -159,4 +171,5 @@ Exclusions:
 | diff | 6 | 6 |
 | reporter | 4 | 4 |
 | logger | 1 | 1 |
-| **Total** | **45** | **45** |
+| examples | 1 | 1 |
+| **Total** | **46** | **46** |
