@@ -30,6 +30,12 @@ Exclusions:
 |---|---|---|---|
 | `main.go` | `doc/src/main.go.plan.md` | Entry Point | root |
 
+### scripts/
+
+| Source File | Doc File | File Type | Module |
+|---|---|---|---|
+| `scripts/verify-release-assets.sh` | - | Release Tooling | scripts |
+
 ### cmd/
 
 | Source File | Doc File | File Type | Module |

@@ -6,6 +6,7 @@
 |---|---|
 | Total source files (non-test `.go`) | 45 |
 | Test files (`*_test.go`) | 28 |
+| Project tooling files | 1 |
 | Project-level docs (`doc/*.md`) | 6 |
 | File-level docs (`doc/src/**/*.plan.md`) | 45 |
 | Project-level coverage | 100% |
@@ -34,6 +35,7 @@
 | File Type | Count | Files |
 |---|---|---|
 | Entry Point | 1 | `main.go` |
+| Release Tooling | 1 | `scripts/verify-release-assets.sh` |
 | CLI Command / Helper | 11 | `cmd/root.go`, `cmd/version.go`, `cmd/session.go`, `cmd/runtime.go`, `cmd/dbproxy.go`, `cmd/record.go`, `cmd/record_stop.go`, `cmd/record_status.go`, `cmd/replay.go`, `cmd/diff.go`, `cmd/report.go` |
 | Data Model | 5 | `internal/model/session.go`, `internal/model/record.go`, `internal/model/request.go`, `internal/model/sideeffect.go`, `internal/model/diff.go` |
 | Configuration | 3 | `internal/config/config.go`, `internal/config/store.go`, `internal/config/validate.go` |
@@ -64,4 +66,5 @@ The following directories and file patterns are excluded from the documentation 
 | Daemon support docs added | 2026-03-04 |
 | Config runtime docs synchronized | 2026-03-09 |
 | Test inventory and file coverage refreshed | 2026-03-09 |
-| Last updated | 2026-03-09 |
+| Release tooling inventory added | 2026-05-26 |
+| Last updated | 2026-05-26 |
