@@ -119,6 +119,24 @@ wait_tcp() {
   fail "timed out waiting for ${label}: ${host}:${port}"
 }
 
+wait_process_exit() {
+  local pid="$1"
+  local label="$2"
+  local timeout_seconds="$3"
+  local deadline=$((SECONDS + timeout_seconds))
+
+  while kill -0 "${pid}" >/dev/null 2>&1; do
+    if (( SECONDS >= deadline )); then
+      log "forcing ${label} to stop"
+      kill -KILL "${pid}" >/dev/null 2>&1 || true
+      break
+    fi
+    sleep 1
+  done
+
+  wait "${pid}" >/dev/null 2>&1 || true
+}
+
 write_config() {
   mkdir -p "${WORK_DIR}/data" "${WORK_DIR}/logs" "${WORK_DIR}/artifacts"
   cat >"${CONFIG_FILE}" <<EOF
@@ -214,7 +232,7 @@ wait_tcp 127.0.0.1 18080 "record HTTP proxy"
 curl -fsS "http://127.0.0.1:18080/users/1" -o "${WORK_DIR}/artifacts/record-response.json"
 
 kill -TERM "${RECORD_PID}" >/dev/null 2>&1 || true
-wait "${RECORD_PID}" || true
+wait_process_exit "${RECORD_PID}" "record stage" 10
 RECORD_PID=""
 
 log "starting replay stage"
