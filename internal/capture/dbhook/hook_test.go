@@ -3,9 +3,11 @@ package dbhook
 import (
 	"context"
 	"errors"
+	"reflect"
 	"testing"
 	"time"
 
+	"shadiff/internal/dbtype"
 	"shadiff/internal/model"
 )
 
@@ -100,6 +102,17 @@ func TestNewHook_Redis(t *testing.T) {
 	}
 }
 
+func TestHookConstructorsCoverSupportedDBTypes(t *testing.T) {
+	got := make([]string, 0, len(hookConstructors))
+	for dbType := range hookConstructors {
+		got = append(got, dbType)
+	}
+	want := dbtype.Supported()
+	if !reflect.DeepEqual(asSet(got), asSet(want)) {
+		t.Fatalf("hook constructors cover %#v, want %#v", got, want)
+	}
+}
+
 func TestNewHook_Unsupported(t *testing.T) {
 	cfg := Config{DBType: "sqlite", ListenAddr: ":15433", TargetAddr: "127.0.0.1:5432"}
 	hook, err := NewHook(cfg)
@@ -128,13 +141,13 @@ func TestGroupFlush_WaitsForAllHooksAndForwarders(t *testing.T) {
 	sink := make(chan model.SideEffect, 4)
 	first := &fakeHook{sideEffects: make(chan model.SideEffect, 1)}
 	first.flush = func(ctx context.Context) error {
-		first.sideEffects <- model.SideEffect{Type: model.SideEffectDB, DBType: "mysql", Query: "SELECT 1"}
+		first.sideEffects <- model.NewSQLSideEffect("mysql", "SELECT 1", time.Now().UnixMilli())
 		return nil
 	}
 	second := &fakeHook{sideEffects: make(chan model.SideEffect, 1)}
 	second.flush = func(ctx context.Context) error {
 		time.Sleep(10 * time.Millisecond)
-		second.sideEffects <- model.SideEffect{Type: model.SideEffectDB, DBType: "postgres", Query: "SELECT 2"}
+		second.sideEffects <- model.NewSQLSideEffect("postgres", "SELECT 2", time.Now().UnixMilli())
 		return nil
 	}
 
@@ -149,7 +162,7 @@ func TestGroupFlush_WaitsForAllHooksAndForwarders(t *testing.T) {
 		t.Fatalf("len(sink) = %d, want 2", len(sink))
 	}
 
-	got := []string{(<-sink).Query, (<-sink).Query}
+	got := []string{(<-sink).SQL().Query, (<-sink).SQL().Query}
 	if got[0] != "SELECT 1" && got[1] != "SELECT 1" {
 		t.Fatalf("missing first query in %+v", got)
 	}
@@ -166,7 +179,7 @@ func TestSideEffectForwarderWaitDrained_BlocksUntilSinkDelivery(t *testing.T) {
 	sink := make(chan model.SideEffect)
 	forwarder := newSideEffectForwarder(ctx, source, sink)
 
-	source <- model.SideEffect{Type: model.SideEffectDB, DBType: "mysql", Query: "SELECT blocked"}
+	source <- model.NewSQLSideEffect("mysql", "SELECT blocked", time.Now().UnixMilli())
 
 	deadline := time.After(100 * time.Millisecond)
 	for len(source) != 0 {
@@ -202,4 +215,12 @@ func TestGroupFlush_RespectsContextTimeout(t *testing.T) {
 	if err := group.Flush(ctx); err == nil {
 		t.Fatal("expected Flush() to return context timeout")
 	}
+}
+
+func asSet(values []string) map[string]bool {
+	set := make(map[string]bool, len(values))
+	for _, value := range values {
+		set[value] = true
+	}
+	return set
 }

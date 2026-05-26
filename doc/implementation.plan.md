@@ -65,15 +65,22 @@ This document maps every package, source file, and key implementation pattern in
 | `recorder.go` | Unified recorder; manages request scopes, attributes side effects from the channel by timestamp, persists via `FileStore.AppendRecord()`, and exposes request-body artifact persistence for the proxy |
 | `recorder_test.go` | Tests for the Recorder |
 
+### `internal/dbtype/` -- Database Type Registry
+
+| File | Description |
+|------|-------------|
+| `dbtype.go` | Canonical supported DB proxy type constants plus `Supported`, `IsSupported`, and `Names` helpers used by config, dbhook, and diff |
+
 ### `internal/capture/dbhook/` -- Database Protocol Proxies
 
 | File | Description |
 |------|-------------|
-| `hook.go` | `DBHook` interface definition, hook flush coordination, `Group` fan-in/drain helper, `Config` struct, `NewHook()` factory function, `UnsupportedDBError` type |
-| `mysql.go` | MySQL protocol proxy; TCP listener with bidirectional forwarding; parses COM_QUERY/COM_STMT_PREPARE from the MySQL packet format (3-byte LE length + seq + command byte + payload) |
-| `postgres.go` | PostgreSQL protocol proxy; TCP listener with startup-phase detection; parses frontend Simple Query (`Q`) and Parse (`P`) messages using big-endian length-prefixed format |
-| `mongo.go` | MongoDB protocol proxy; parses OP_MSG wire protocol (opcode 2013); extracts CRUD commands via simplified BSON-to-map parsing; includes `MongoCommandToJSON()` helper |
-| `redis.go` | Redis protocol proxy; parses RESP array and inline commands from a stream buffer; captures command, primary key, and redacted/encoded args |
+| `hook.go` | `DBHook` interface definition, hook flush coordination, `Group` fan-in/drain helper, `Config` struct, constructor registry-backed `NewHook()`, `UnsupportedDBError` type |
+| `tcp_proxy.go` | Shared transparent TCP proxy lifecycle for DB hooks: listener, connection tracking, bidirectional forwarding, flush barriers, and side-effect emission |
+| `mysql.go` | MySQL stream parser; parses COM_QUERY/COM_STMT_PREPARE from buffered MySQL packet frames |
+| `postgres.go` | PostgreSQL stream parser; handles startup phase and parses frontend Simple Query (`Q`) and Parse (`P`) messages |
+| `mongo.go` | MongoDB stream parser; parses OP_MSG wire protocol (opcode 2013); extracts CRUD commands via simplified BSON-to-map parsing; includes `MongoCommandToJSON()` helper |
+| `redis.go` | Redis stream parser; parses RESP array and inline commands; captures command, primary key, and redacted/encoded args |
 | `hook_test.go` | Tests for DBHook implementations |
 | `mongo_parse_test.go` | Tests for MongoDB BSON parsing logic |
 
@@ -90,7 +97,8 @@ This document maps every package, source file, and key implementation pattern in
 
 | File | Description |
 |------|-------------|
-| `engine.go` | Core diff engine; loads recorded and replayed records, pairs by sequence number, reports replay failures, compares status codes / headers / bodies / SQL side effects / Mongo side effects / Redis side effects; saves results via `DiffStore` |
+| `engine.go` | Core diff engine; loads recorded and replayed records, pairs by sequence number, reports replay failures, compares status codes / headers / bodies / side effects through the comparer registry; saves results via `DiffStore` |
+| `sideeffects.go` | Side-effect comparer registry and residual side-effect count comparison |
 | `json.go` | `JSONDiffer` struct; recursive structural JSON comparison (objects, arrays, primitives); supports ordered and unordered array comparison with best-match pairing |
 | `rule_loader.go` | Converts config rules to diff rules and loads external rule files from JSON or YAML |
 | `rules.go` | `Rule`, `RuleSet`, `Matcher` interface; path-wildcard-to-regexp compilation; built-in matchers (Timestamp, UUID, NumericTolerance); `DefaultRules()`, `DefaultIgnoreHeaders()`, `FormatDiffSummary()`, `FormatPath()` |
@@ -116,7 +124,7 @@ This document maps every package, source file, and key implementation pattern in
 | `session.go` | `Session` struct (ID, Name, Status, Source/Target endpoints, Tags, Metadata, timestamps); `SessionStatus` enum (`recording`, `completed`, `replayed`); `EndpointConfig`; `SessionFilter` |
 | `record.go` | `Record` struct (ID, SessionID, Sequence, Request, Response, SideEffects, Duration, RecordedAt, Error) |
 | `request.go` | `HTTPRequest` struct (Method, Path, Query, Headers, Body, BodyLen); `HTTPResponse` struct (StatusCode, Headers, Body, BodyLen) |
-| `sideeffect.go` | `SideEffect` struct with type discriminator (`database` / `http_call`); SQL fields (Query, Args, RowCount); MongoDB fields (Database, Collection, Operation, Filter, Update, Documents, DocCount); Redis fields (RedisCommand, RedisKey, RedisArgs); external HTTP call fields |
+| `sideeffect.go` | `SideEffect` envelope with typed payloads: `DatabaseSideEffect` (`SQL`, `Mongo`, `Redis`) and `HTTPSideEffect`; includes constructors and safe accessors |
 | `diff.go` | `DiffResult` struct; `DifferenceKind` enum (status_code, header, body, body_field, db_query, db_query_count, mongo_op, redis_command, redis_command_count, external_call); `Severity` enum; `Difference` struct; `DiffSummary` struct |
 | `model_test.go` | Tests for model types |
 
@@ -178,20 +186,20 @@ Client  --->  Proxy.ServeHTTP()  --->  ReverseProxy  --->  Target Service
 
 ### 3.2 Protocol Sniffing (TCP Man-in-the-Middle)
 
-**Location**: `internal/capture/dbhook/mysql.go`, `postgres.go`, `mongo.go`, `redis.go`
+**Location**: `internal/capture/dbhook/tcp_proxy.go`, `mysql.go`, `postgres.go`, `mongo.go`, `redis.go`
 
-All three database hooks follow the same architectural pattern:
+All database hooks share the same lifecycle through `tcpProxy`:
 
 1. **TCP Listener**: Accept incoming connections on the proxy listen address.
 2. **Bidirectional Forwarding**: For each connection, establish a connection to the real database server and set up two goroutines:
    - **Server-to-Client**: Plain `io.Copy` passthrough (no inspection needed for server responses).
-   - **Client-to-Server**: Read data, forward it to the server, then parse the protocol-specific packet format to extract queries/commands.
-3. **Protocol Parsing**: Each hook implements protocol-specific parsing:
+   - **Client-to-Server**: Read data, forward it to the server, then feed the same bytes into the protocol parser.
+3. **Protocol Parsing**: Each hook supplies a stream parser:
    - **MySQL**: 3-byte little-endian length + 1-byte sequence number + command byte. Captures `COM_QUERY` (0x03) and `COM_STMT_PREPARE` (0x16).
    - **PostgreSQL**: 1-byte message type + 4-byte big-endian length. Captures Simple Query (`Q`) and Extended Query Parse (`P`). Handles the startup phase (no type byte) separately.
    - **MongoDB**: 16-byte wire protocol header (4-byte LE message length, request ID, response-to, opcode). Captures OP_MSG (opcode 2013) with BSON document body parsing.
    - **Redis**: RESP arrays of bulk strings and inline commands. Captures normalized command, primary key, and redacted/encoded arguments.
-4. **Side Effect Emission**: Parsed queries are wrapped in `model.SideEffect` and sent on a buffered channel (capacity 1000). Channel-full drops are logged as warnings.
+4. **Side Effect Emission**: Parsed queries/commands are wrapped in typed `model.SideEffect` payloads and sent on a buffered channel (capacity 1000). Channel-full drops are logged as warnings.
 
 ### 3.3 Worker Pool for Concurrent Replay
 

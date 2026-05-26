@@ -28,12 +28,13 @@
   - `replay.timeout` parses as `time.Duration`
   - `diff.maxDiffs >= 1`
   - `log.level` in `debug|info|warn|error`
-  - each capture and replay DB proxy uses `mysql|postgres|mongo|redis` and has non-empty listen/target addresses
+  - each capture and replay DB proxy uses a type supported by `internal/dbtype` and has non-empty listen/target addresses
 - Validation is intentionally synchronous and side-effect free.
 
 ## 5. Dependencies
 - External:
-  - Standard library `fmt`, `strings`, `time`
+- Internal: `shadiff/internal/dbtype`
+- External: standard library `fmt`, `strings`, `time`
 
 ## 6. Change Impact
 - New config fields that can fail at runtime should usually gain validation here.
@@ -42,5 +43,5 @@
 
 ## 7. Maintenance Notes
 - Prefer explicit validation errors over silent normalization.
-- Keep accepted value sets aligned with downstream packages such as logger and dbhook.
+- Keep accepted DB proxy types aligned through `internal/dbtype`; do not duplicate DB type allowlists here.
 - When adding config validation, also extend `internal/config/validate_test.go`.

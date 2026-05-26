@@ -173,22 +173,8 @@ func (e *Engine) compareRecords(original, replay model.Record) model.DiffResult 
 		diffs = append(diffs, bodyDiffs...)
 	}
 
-	// 4. Compare DB and Mongo side effects semantically.
-	diffs = append(diffs, CompareDBSideEffects(original.SideEffects, replay.SideEffects)...)
-	diffs = append(diffs, CompareMongoSideEffects(original.SideEffects, replay.SideEffects)...)
-	diffs = append(diffs, CompareRedisSideEffects(original.SideEffects, replay.SideEffects)...)
-
-	// 5. Compare residual non-DB side effect counts.
-	if otherOriginal, otherReplay := countResidualSideEffects(original.SideEffects), countResidualSideEffects(replay.SideEffects); otherOriginal != otherReplay {
-		diffs = append(diffs, model.Difference{
-			Kind:     model.DiffDBQueryCount,
-			Path:     "sideEffects",
-			Expected: otherOriginal,
-			Actual:   otherReplay,
-			Message:  fmt.Sprintf("residual side effect count differs: %d vs %d", otherOriginal, otherReplay),
-			Severity: model.SeverityError,
-		})
-	}
+	// 4. Compare side effects semantically through the comparer registry.
+	diffs = append(diffs, CompareSideEffects(original.SideEffects, replay.SideEffects)...)
 
 	// Apply rules
 	diffs = e.ruleSet.Apply(diffs)
@@ -210,23 +196,6 @@ func (e *Engine) compareRecords(original, replay model.Record) model.DiffResult 
 		Match:       match,
 		Differences: diffs,
 	}
-}
-
-func countResidualSideEffects(effects []model.SideEffect) int {
-	count := 0
-	for _, effect := range effects {
-		if effect.Type != model.SideEffectDB {
-			count++
-			continue
-		}
-		switch effect.DBType {
-		case "mysql", "postgres", "mongo", "redis":
-			continue
-		default:
-			count++
-		}
-	}
-	return count
 }
 
 func (e *Engine) limitDiffs(diffs []model.Difference, match bool) []model.Difference {

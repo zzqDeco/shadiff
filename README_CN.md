@@ -45,6 +45,7 @@ shadiff/
 │   ├── session.go                     # shadiff session (list/show/delete)
 │   └── version.go                     # shadiff version
 ├── internal/
+│   ├── dbtype/                        # 支持的 DB 代理类型注册表
 │   ├── model/                         # 核心数据模型
 │   │   ├── session.go                 # 录制会话
 │   │   ├── record.go                  # 单条行为记录（请求+响应+副作用）
@@ -59,6 +60,7 @@ shadiff/
 │   │   ├── recorder.go               # 统一录制器，组装 Record 并持久化
 │   │   └── dbhook/                    # 数据库协议代理
 │   │       ├── hook.go                # DBHook 接口定义
+│   │       ├── tcp_proxy.go           # 共享透明 TCP 代理生命周期
 │   │       ├── mysql.go               # MySQL 协议代理（COM_QUERY 解析）
 │   │       ├── postgres.go            # PostgreSQL 协议代理（Simple/Extended Query）
 │   │       ├── mongo.go               # MongoDB 协议代理（OP_MSG Wire Protocol）
@@ -72,6 +74,7 @@ shadiff/
 │   │   └── transform.go              # 请求变换（host/header 替换）
 │   ├── diff/                          # 语义对拍引擎
 │   │   ├── engine.go                  # 对拍编排器，按序号配对记录
+│   │   ├── sideeffects.go             # 副作用 comparer 注册表
 │   │   ├── json.go                    # JSON 结构化递归 diff
 │   │   ├── db.go                      # SQL 数据库对比（MySQL/PostgreSQL）
 │   │   ├── mongo.go                   # MongoDB 操作对比
@@ -353,6 +356,10 @@ CLI flag > config.json > 内置默认值
 `--db-proxy` 格式：`<type>://<listen_addr>-><target_addr>`
 
 支持类型：`mysql`、`postgres`、`mongo`、`redis`，可多次指定。
+
+## Side-effect 存储说明
+
+从 `v0.4.0` 开始，数据库副作用使用 typed JSON payload，例如 `database.sql`、`database.mongo` 和 `database.redis`。`v0.3.x` 及更早版本录制的 session 使用旧 flat 字段，本版本不做迁移。
 
 ## 文档
 

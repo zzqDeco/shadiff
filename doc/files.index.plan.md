@@ -98,6 +98,12 @@ Exclusions:
 | `internal/config/store.go` | `doc/src/internal/config/store.go.plan.md` | Configuration Store | config |
 | `internal/config/validate.go` | `doc/src/internal/config/validate.go.plan.md` | Configuration Validation | config |
 
+### internal/dbtype/
+
+| Source File | Doc File | File Type | Module |
+|---|---|---|---|
+| `internal/dbtype/dbtype.go` | `doc/src/internal/dbtype/dbtype.go.plan.md` | Database Type Registry | dbtype |
+
 ### internal/capture/
 
 | Source File | Doc File | File Type | Module |
@@ -110,6 +116,7 @@ Exclusions:
 | Source File | Doc File | File Type | Module |
 |---|---|---|---|
 | `internal/capture/dbhook/hook.go` | `doc/src/internal/capture/dbhook/hook.go.plan.md` | Interface Definition | dbhook |
+| `internal/capture/dbhook/tcp_proxy.go` | `doc/src/internal/capture/dbhook/tcp_proxy.go.plan.md` | DB Hook Shared Proxy | dbhook |
 | `internal/capture/dbhook/mysql.go` | `doc/src/internal/capture/dbhook/mysql.go.plan.md` | DB Hook Implementation | dbhook |
 | `internal/capture/dbhook/postgres.go` | `doc/src/internal/capture/dbhook/postgres.go.plan.md` | DB Hook Implementation | dbhook |
 | `internal/capture/dbhook/mongo.go` | `doc/src/internal/capture/dbhook/mongo.go.plan.md` | DB Hook Implementation | dbhook |
@@ -135,6 +142,7 @@ Exclusions:
 | Source File | Doc File | File Type | Module |
 |---|---|---|---|
 | `internal/diff/engine.go` | `doc/src/internal/diff/engine.go.plan.md` | Diff Engine | diff |
+| `internal/diff/sideeffects.go` | `doc/src/internal/diff/sideeffects.go.plan.md` | Side-effect Diff Registry | diff |
 | `internal/diff/json.go` | `doc/src/internal/diff/json.go.plan.md` | JSON Differ | diff |
 | `internal/diff/db.go` | `doc/src/internal/diff/db.go.plan.md` | DB Diff | diff |
 | `internal/diff/mongo.go` | `doc/src/internal/diff/mongo.go.plan.md` | MongoDB Diff | diff |
@@ -166,12 +174,13 @@ Exclusions:
 | daemon | 3 | 3 |
 | model | 5 | 5 |
 | config | 3 | 3 |
+| dbtype | 1 | 1 |
 | capture | 2 | 2 |
-| dbhook | 5 | 5 |
+| dbhook | 6 | 6 |
 | storage | 2 | 2 |
 | replay | 3 | 3 |
-| diff | 7 | 7 |
+| diff | 8 | 8 |
 | reporter | 4 | 4 |
 | logger | 1 | 1 |
 | examples | 1 | 1 |
-| **Total** | **48** | **48** |
+| **Total** | **51** | **51** |

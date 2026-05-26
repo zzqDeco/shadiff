@@ -58,7 +58,8 @@ func TestMySQLDBProxyCapturesRealQuery(t *testing.T) {
 
 	flushGroup(t, group)
 	effect := waitForEffect(t, sink, func(effect model.SideEffect) bool {
-		return effect.DBType == "mysql" && strings.Contains(effect.Query, marker)
+		sql := effect.SQL()
+		return effect.DatabaseType() == "mysql" && sql != nil && strings.Contains(sql.Query, marker)
 	})
 	if effect.Type != model.SideEffectDB {
 		t.Fatalf("effect type = %q, want %q", effect.Type, model.SideEffectDB)
@@ -86,7 +87,8 @@ func TestPostgresDBProxyCapturesRealQuery(t *testing.T) {
 
 	flushGroup(t, group)
 	effect := waitForEffect(t, sink, func(effect model.SideEffect) bool {
-		return effect.DBType == "postgres" && strings.Contains(effect.Query, marker)
+		sql := effect.SQL()
+		return effect.DatabaseType() == "postgres" && sql != nil && strings.Contains(sql.Query, marker)
 	})
 	if effect.Type != model.SideEffectDB {
 		t.Fatalf("effect type = %q, want %q", effect.Type, model.SideEffectDB)
@@ -119,8 +121,9 @@ func TestMongoDBProxyCapturesRealCommands(t *testing.T) {
 		if !ok {
 			t.Fatalf("missing mongo %s side effect; seen=%v", op, seen)
 		}
-		if effect.Collection != "users" || effect.Database != dbName {
-			t.Fatalf("mongo %s effect = collection %q database %q, want users/%s", op, effect.Collection, effect.Database, dbName)
+		mongoPayload := effect.Mongo()
+		if mongoPayload.Collection != "users" || mongoPayload.Database != dbName {
+			t.Fatalf("mongo %s effect = collection %q database %q, want users/%s", op, mongoPayload.Collection, mongoPayload.Database, dbName)
 		}
 	}
 }
@@ -149,13 +152,15 @@ func TestRedisDBProxyCapturesRealCommands(t *testing.T) {
 
 	flushGroup(t, group)
 	setEffect := waitForEffect(t, sink, func(effect model.SideEffect) bool {
-		return effect.DBType == "redis" && effect.RedisCommand == "SET" && effect.RedisKey == key
+		redisPayload := effect.Redis()
+		return effect.DatabaseType() == "redis" && redisPayload != nil && redisPayload.Command == "SET" && redisPayload.Key == key
 	})
 	if setEffect.Type != model.SideEffectDB {
 		t.Fatalf("effect type = %q, want %q", setEffect.Type, model.SideEffectDB)
 	}
 	getEffect := waitForEffect(t, sink, func(effect model.SideEffect) bool {
-		return effect.DBType == "redis" && effect.RedisCommand == "GET" && effect.RedisKey == key
+		redisPayload := effect.Redis()
+		return effect.DatabaseType() == "redis" && redisPayload != nil && redisPayload.Command == "GET" && redisPayload.Key == key
 	})
 	if getEffect.Type != model.SideEffectDB {
 		t.Fatalf("effect type = %q, want %q", getEffect.Type, model.SideEffectDB)
@@ -211,13 +216,8 @@ func TestReplayDiffDetectsDBSideEffectDifference(t *testing.T) {
 			Body:       body,
 			BodyLen:    int64(len(body)),
 		},
-		SideEffects: []model.SideEffect{{
-			Type:      model.SideEffectDB,
-			DBType:    "mysql",
-			Query:     "SELECT 1 /* shadiff_e2e_original */",
-			Timestamp: time.Now().UnixMilli(),
-		}},
-		RecordedAt: time.Now().UnixMilli(),
+		SideEffects: []model.SideEffect{model.NewSQLSideEffect("mysql", "SELECT 1 /* shadiff_e2e_original */", time.Now().UnixMilli())},
+		RecordedAt:  time.Now().UnixMilli(),
 	}
 	if err := store.AppendRecord(session.ID, &original); err != nil {
 		t.Fatalf("AppendRecord() error: %v", err)
@@ -307,14 +307,9 @@ func TestReplayDiffDetectsRedisSideEffectDifference(t *testing.T) {
 			Body:       body,
 			BodyLen:    int64(len(body)),
 		},
-		SideEffects: []model.SideEffect{{
-			Type:         model.SideEffectDB,
-			DBType:       "redis",
-			RedisCommand: "SET",
-			RedisKey:     "shadiff:redis:record",
-			RedisArgs:    []string{"shadiff:redis:record", "old"},
-			Timestamp:    time.Now().UnixMilli(),
-		}},
+		SideEffects: []model.SideEffect{
+			model.NewRedisSideEffect("SET", "shadiff:redis:record", []string{"shadiff:redis:record", "old"}, time.Now().UnixMilli()),
+		},
 		RecordedAt: time.Now().UnixMilli(),
 	}
 	if err := store.AppendRecord(session.ID, &original); err != nil {
@@ -576,10 +571,11 @@ func collectMongoEffects(t *testing.T, sink <-chan model.SideEffect) map[string]
 	for len(seen) < 2 {
 		select {
 		case effect := <-sink:
-			if effect.DBType == "mongo" && effect.Collection == "users" && effect.Database == dbName {
-				switch effect.Operation {
+			mongoPayload := effect.Mongo()
+			if effect.DatabaseType() == "mongo" && mongoPayload != nil && mongoPayload.Collection == "users" && mongoPayload.Database == dbName {
+				switch mongoPayload.Operation {
 				case "insert", "find":
-					seen[effect.Operation] = effect
+					seen[mongoPayload.Operation] = effect
 				}
 			}
 		case <-timer.C:
@@ -725,7 +721,8 @@ func mongoURI(addr string) string {
 
 func recordHasQuery(record model.Record, marker string) bool {
 	for _, effect := range record.SideEffects {
-		if effect.DBType == "mysql" && strings.Contains(effect.Query, marker) {
+		sql := effect.SQL()
+		if effect.DatabaseType() == "mysql" && sql != nil && strings.Contains(sql.Query, marker) {
 			return true
 		}
 	}
@@ -734,7 +731,8 @@ func recordHasQuery(record model.Record, marker string) bool {
 
 func recordHasRedisCommand(record model.Record, command, key string) bool {
 	for _, effect := range record.SideEffects {
-		if effect.DBType == "redis" && effect.RedisCommand == command && effect.RedisKey == key {
+		redisPayload := effect.Redis()
+		if effect.DatabaseType() == "redis" && redisPayload != nil && redisPayload.Command == command && redisPayload.Key == key {
 			return true
 		}
 	}

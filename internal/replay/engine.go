@@ -152,9 +152,9 @@ func (e *Engine) takeSideEffectsWindow(startedAt, finishedAt int64) []model.Side
 		case effect.Timestamp < startedAt:
 			logger.Warn("replay orphan side effect dropped",
 				"session", e.sessionID,
-				"db_type", effect.DBType,
+				"db_type", effect.DatabaseType(),
 				"timestamp", effect.Timestamp,
-				"query", effect.Query,
+				"query", replaySideEffectQuery(effect),
 			)
 		case effect.Timestamp <= finishedAt:
 			matched = append(matched, effect)
@@ -172,12 +172,19 @@ func (e *Engine) dropPendingSideEffects() {
 	for _, effect := range e.pendingSideEffects {
 		logger.Warn("replay orphan side effect dropped",
 			"session", e.sessionID,
-			"db_type", effect.DBType,
+			"db_type", effect.DatabaseType(),
 			"timestamp", effect.Timestamp,
-			"query", effect.Query,
+			"query", replaySideEffectQuery(effect),
 		)
 	}
 	e.pendingSideEffects = nil
+}
+
+func replaySideEffectQuery(effect model.SideEffect) string {
+	if sql := effect.SQL(); sql != nil {
+		return sql.Query
+	}
+	return ""
 }
 
 func (e *Engine) drainSideEffects() {

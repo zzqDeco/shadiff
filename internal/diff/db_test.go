@@ -6,14 +6,18 @@ import (
 	"shadiff/internal/model"
 )
 
+func testSQLSideEffect(dbType, query string) model.SideEffect {
+	return model.NewSQLSideEffect(dbType, query, 0)
+}
+
 func TestCompareDBSideEffects_Equal(t *testing.T) {
 	original := []model.SideEffect{
-		{Type: model.SideEffectDB, DBType: "mysql", Query: "SELECT * FROM users"},
-		{Type: model.SideEffectDB, DBType: "postgres", Query: "INSERT INTO orders (id) VALUES (1)"},
+		testSQLSideEffect("mysql", "SELECT * FROM users"),
+		testSQLSideEffect("postgres", "INSERT INTO orders (id) VALUES (1)"),
 	}
 	replay := []model.SideEffect{
-		{Type: model.SideEffectDB, DBType: "mysql", Query: "SELECT * FROM users"},
-		{Type: model.SideEffectDB, DBType: "postgres", Query: "INSERT INTO orders (id) VALUES (1)"},
+		testSQLSideEffect("mysql", "SELECT * FROM users"),
+		testSQLSideEffect("postgres", "INSERT INTO orders (id) VALUES (1)"),
 	}
 
 	diffs := CompareDBSideEffects(original, replay)
@@ -24,11 +28,11 @@ func TestCompareDBSideEffects_Equal(t *testing.T) {
 
 func TestCompareDBSideEffects_DifferentQueryCount(t *testing.T) {
 	original := []model.SideEffect{
-		{Type: model.SideEffectDB, DBType: "mysql", Query: "SELECT 1"},
-		{Type: model.SideEffectDB, DBType: "mysql", Query: "SELECT 2"},
+		testSQLSideEffect("mysql", "SELECT 1"),
+		testSQLSideEffect("mysql", "SELECT 2"),
 	}
 	replay := []model.SideEffect{
-		{Type: model.SideEffectDB, DBType: "mysql", Query: "SELECT 1"},
+		testSQLSideEffect("mysql", "SELECT 1"),
 	}
 
 	diffs := CompareDBSideEffects(original, replay)
@@ -49,10 +53,10 @@ func TestCompareDBSideEffects_DifferentQueryCount(t *testing.T) {
 
 func TestCompareDBSideEffects_DifferentSQL(t *testing.T) {
 	original := []model.SideEffect{
-		{Type: model.SideEffectDB, DBType: "mysql", Query: "SELECT * FROM users"},
+		testSQLSideEffect("mysql", "SELECT * FROM users"),
 	}
 	replay := []model.SideEffect{
-		{Type: model.SideEffectDB, DBType: "mysql", Query: "SELECT * FROM orders"},
+		testSQLSideEffect("mysql", "SELECT * FROM orders"),
 	}
 
 	diffs := CompareDBSideEffects(original, replay)
@@ -70,10 +74,10 @@ func TestCompareDBSideEffects_DifferentSQL(t *testing.T) {
 func TestCompareDBSideEffects_SQLNormalization(t *testing.T) {
 	// Extra whitespace and different casing should be normalized away
 	original := []model.SideEffect{
-		{Type: model.SideEffectDB, DBType: "mysql", Query: "SELECT  *  FROM   users"},
+		testSQLSideEffect("mysql", "SELECT  *  FROM   users"),
 	}
 	replay := []model.SideEffect{
-		{Type: model.SideEffectDB, DBType: "mysql", Query: "select * from users"},
+		testSQLSideEffect("mysql", "select * from users"),
 	}
 
 	diffs := CompareDBSideEffects(original, replay)
@@ -85,13 +89,13 @@ func TestCompareDBSideEffects_SQLNormalization(t *testing.T) {
 func TestCompareDBSideEffects_MixedDBTypes(t *testing.T) {
 	// Only mysql and postgres should be filtered; mongo should be ignored
 	original := []model.SideEffect{
-		{Type: model.SideEffectDB, DBType: "mysql", Query: "SELECT 1"},
-		{Type: model.SideEffectDB, DBType: "mongo", Collection: "users", Operation: "find"},
+		testSQLSideEffect("mysql", "SELECT 1"),
+		model.NewMongoSideEffect(model.MongoSideEffect{Collection: "users", Operation: "find"}, 0),
 		{Type: model.SideEffectHTTP},
 	}
 	replay := []model.SideEffect{
-		{Type: model.SideEffectDB, DBType: "mysql", Query: "SELECT 1"},
-		{Type: model.SideEffectDB, DBType: "mongo", Collection: "users", Operation: "find"},
+		testSQLSideEffect("mysql", "SELECT 1"),
+		model.NewMongoSideEffect(model.MongoSideEffect{Collection: "users", Operation: "find"}, 0),
 		{Type: model.SideEffectHTTP},
 	}
 

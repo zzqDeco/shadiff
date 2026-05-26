@@ -206,13 +206,11 @@ func TestSimpleBSONToMap_SubDocument(t *testing.T) {
 }
 
 func TestMongoCommandToJSON_BasicCommand(t *testing.T) {
-	effect := model.SideEffect{
-		Type:       model.SideEffectDB,
-		DBType:     "mongo",
+	effect := model.NewMongoSideEffect(model.MongoSideEffect{
 		Operation:  "find",
 		Collection: "users",
 		Database:   "testdb",
-	}
+	}, 1700000000000)
 
 	result := MongoCommandToJSON(effect)
 	if result == "" {
@@ -236,14 +234,12 @@ func TestMongoCommandToJSON_BasicCommand(t *testing.T) {
 }
 
 func TestMongoCommandToJSON_WithFilter(t *testing.T) {
-	effect := model.SideEffect{
-		Type:       model.SideEffectDB,
-		DBType:     "mongo",
+	effect := model.NewMongoSideEffect(model.MongoSideEffect{
 		Operation:  "find",
 		Collection: "users",
 		Database:   "testdb",
 		Filter:     map[string]any{"age": 25},
-	}
+	}, 1700000000000)
 
 	result := MongoCommandToJSON(effect)
 
@@ -258,11 +254,11 @@ func TestMongoCommandToJSON_WithFilter(t *testing.T) {
 }
 
 func TestMongoCommandToJSON_WithNilOptionalFields(t *testing.T) {
-	effect := model.SideEffect{
+	effect := model.NewMongoSideEffect(model.MongoSideEffect{
 		Operation:  "insert",
 		Collection: "logs",
 		Database:   "app",
-	}
+	}, 1700000000000)
 
 	result := MongoCommandToJSON(effect)
 

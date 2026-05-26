@@ -23,6 +23,7 @@
 | `plan/v0.1.1-stability.plan.md` | Harden release automation and add Docker-backed DB side-effect integration coverage | Completed |
 | `plan/v0.2.0-e2e-usability.plan.md` | Add an official reproducible E2E demo across HTTP and DB side effects | Completed |
 | `plan/redis-sideeffects.plan.md` | Add Redis DB proxy capture, replay attribution, semantic diff, integration tests, and E2E demo coverage | Completed |
+| `plan/sideeffect-architecture-refactor.plan.md` | Refactor side-effect payloads, DB type registry, diff comparer dispatch, and DB hook TCP lifecycle | Completed |
 
 ## Phase History
 

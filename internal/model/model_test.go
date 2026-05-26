@@ -1,6 +1,8 @@
 package model
 
 import (
+	"encoding/json"
+	"strings"
 	"testing"
 )
 
@@ -129,7 +131,7 @@ func TestRecord_FieldAssignment(t *testing.T) {
 			StatusCode: 200,
 		},
 		SideEffects: []SideEffect{
-			{Type: SideEffectDB, DBType: "mysql"},
+			NewSQLSideEffect("mysql", "SELECT 1", 1700000000000),
 		},
 		Duration:   150,
 		RecordedAt: 1700000000000,
@@ -249,10 +251,14 @@ func TestSideEffect_DBFields(t *testing.T) {
 		Type:      SideEffectDB,
 		Timestamp: 1700000000000,
 		Duration:  25,
-		DBType:    "postgres",
-		Query:     "SELECT * FROM users WHERE id = $1",
-		Args:      []any{42},
-		RowCount:  1,
+		Database: &DatabaseSideEffect{
+			Type: "postgres",
+			SQL: &SQLSideEffect{
+				Query:    "SELECT * FROM users WHERE id = $1",
+				Args:     []any{42},
+				RowCount: 1,
+			},
+		},
 	}
 	if se.Type != SideEffectDB {
 		t.Errorf("Type = %q, want %q", se.Type, SideEffectDB)
@@ -263,63 +269,61 @@ func TestSideEffect_DBFields(t *testing.T) {
 	if se.Duration != 25 {
 		t.Errorf("Duration = %d, want 25", se.Duration)
 	}
-	if se.DBType != "postgres" {
-		t.Errorf("DBType = %q, want %q", se.DBType, "postgres")
+	if se.DatabaseType() != "postgres" {
+		t.Errorf("DatabaseType() = %q, want %q", se.DatabaseType(), "postgres")
 	}
-	if se.Query != "SELECT * FROM users WHERE id = $1" {
-		t.Errorf("Query = %q, want expected", se.Query)
+	if se.SQL().Query != "SELECT * FROM users WHERE id = $1" {
+		t.Errorf("SQL.Query = %q, want expected", se.SQL().Query)
 	}
-	if len(se.Args) != 1 {
-		t.Fatalf("len(Args) = %d, want 1", len(se.Args))
+	if len(se.SQL().Args) != 1 {
+		t.Fatalf("len(SQL.Args) = %d, want 1", len(se.SQL().Args))
 	}
-	if se.RowCount != 1 {
-		t.Errorf("RowCount = %d, want 1", se.RowCount)
+	if se.SQL().RowCount != 1 {
+		t.Errorf("SQL.RowCount = %d, want 1", se.SQL().RowCount)
 	}
 }
 
 func TestSideEffect_MongoFields(t *testing.T) {
 	se := SideEffect{
-		Type:       SideEffectDB,
-		DBType:     "mongo",
-		Database:   "testdb",
-		Collection: "users",
-		Operation:  "find",
-		Filter:     map[string]any{"name": "alice"},
-		DocCount:   3,
+		Type: SideEffectDB,
+		Database: &DatabaseSideEffect{
+			Type: "mongo",
+			Mongo: &MongoSideEffect{
+				Database:   "testdb",
+				Collection: "users",
+				Operation:  "find",
+				Filter:     map[string]any{"name": "alice"},
+				DocCount:   3,
+			},
+		},
 	}
-	if se.Database != "testdb" {
-		t.Errorf("Database = %q, want %q", se.Database, "testdb")
+	if se.Mongo().Database != "testdb" {
+		t.Errorf("Mongo.Database = %q, want %q", se.Mongo().Database, "testdb")
 	}
-	if se.Collection != "users" {
-		t.Errorf("Collection = %q, want %q", se.Collection, "users")
+	if se.Mongo().Collection != "users" {
+		t.Errorf("Mongo.Collection = %q, want %q", se.Mongo().Collection, "users")
 	}
-	if se.Operation != "find" {
-		t.Errorf("Operation = %q, want %q", se.Operation, "find")
+	if se.Mongo().Operation != "find" {
+		t.Errorf("Mongo.Operation = %q, want %q", se.Mongo().Operation, "find")
 	}
-	if se.Filter == nil {
+	if se.Mongo().Filter == nil {
 		t.Error("Filter should not be nil")
 	}
-	if se.DocCount != 3 {
-		t.Errorf("DocCount = %d, want 3", se.DocCount)
+	if se.Mongo().DocCount != 3 {
+		t.Errorf("Mongo.DocCount = %d, want 3", se.Mongo().DocCount)
 	}
 }
 
 func TestSideEffect_RedisFields(t *testing.T) {
-	se := SideEffect{
-		Type:         SideEffectDB,
-		DBType:       "redis",
-		RedisCommand: "SET",
-		RedisKey:     "user:1",
-		RedisArgs:    []string{"user:1", "ada"},
+	se := NewRedisSideEffect("SET", "user:1", []string{"user:1", "ada"}, 1700000000000)
+	if se.Redis().Command != "SET" {
+		t.Errorf("Redis.Command = %q, want SET", se.Redis().Command)
 	}
-	if se.RedisCommand != "SET" {
-		t.Errorf("RedisCommand = %q, want SET", se.RedisCommand)
+	if se.Redis().Key != "user:1" {
+		t.Errorf("Redis.Key = %q, want user:1", se.Redis().Key)
 	}
-	if se.RedisKey != "user:1" {
-		t.Errorf("RedisKey = %q, want user:1", se.RedisKey)
-	}
-	if len(se.RedisArgs) != 2 || se.RedisArgs[0] != "user:1" || se.RedisArgs[1] != "ada" {
-		t.Errorf("RedisArgs = %+v, want [user:1 ada]", se.RedisArgs)
+	if len(se.Redis().Args) != 2 || se.Redis().Args[0] != "user:1" || se.Redis().Args[1] != "ada" {
+		t.Errorf("Redis.Args = %+v, want [user:1 ada]", se.Redis().Args)
 	}
 }
 
@@ -327,21 +331,44 @@ func TestSideEffect_HTTPFields(t *testing.T) {
 	req := &HTTPRequest{Method: "GET", Path: "/external"}
 	resp := &HTTPResponse{StatusCode: 200}
 	se := SideEffect{
-		Type:     SideEffectHTTP,
-		HTTPReq:  req,
-		HTTPResp: resp,
+		Type: SideEffectHTTP,
+		HTTP: &HTTPSideEffect{
+			Request:  req,
+			Response: resp,
+		},
 	}
-	if se.HTTPReq == nil {
-		t.Fatal("HTTPReq should not be nil")
+	if se.HTTP == nil || se.HTTP.Request == nil {
+		t.Fatal("HTTP.Request should not be nil")
 	}
-	if se.HTTPReq.Method != "GET" {
-		t.Errorf("HTTPReq.Method = %q, want %q", se.HTTPReq.Method, "GET")
+	if se.HTTP.Request.Method != "GET" {
+		t.Errorf("HTTP.Request.Method = %q, want %q", se.HTTP.Request.Method, "GET")
 	}
-	if se.HTTPResp == nil {
-		t.Fatal("HTTPResp should not be nil")
+	if se.HTTP.Response == nil {
+		t.Fatal("HTTP.Response should not be nil")
 	}
-	if se.HTTPResp.StatusCode != 200 {
-		t.Errorf("HTTPResp.StatusCode = %d, want 200", se.HTTPResp.StatusCode)
+	if se.HTTP.Response.StatusCode != 200 {
+		t.Errorf("HTTP.Response.StatusCode = %d, want 200", se.HTTP.Response.StatusCode)
+	}
+}
+
+func TestSideEffect_JSONUsesTypedPayload(t *testing.T) {
+	se := NewSQLSideEffect("mysql", "SELECT 1", 1700000000000)
+	data, err := json.Marshal(se)
+	if err != nil {
+		t.Fatalf("Marshal() error: %v", err)
+	}
+	got := string(data)
+	var topLevel map[string]any
+	if err := json.Unmarshal(data, &topLevel); err != nil {
+		t.Fatalf("Unmarshal() error: %v", err)
+	}
+	for _, removedField := range []string{"dbType", "query", "redisCommand", "collection"} {
+		if _, ok := topLevel[removedField]; ok {
+			t.Fatalf("JSON %s contains removed top-level field %q", got, removedField)
+		}
+	}
+	if !strings.Contains(got, `"database":{"type":"mysql","sql":{"query":"SELECT 1"}}`) {
+		t.Fatalf("JSON = %s, want typed database payload", got)
 	}
 }
 
@@ -542,10 +569,10 @@ func TestRecord_ZeroValue(t *testing.T) {
 
 func TestSideEffect_NilPointers(t *testing.T) {
 	se := SideEffect{Type: SideEffectDB}
-	if se.HTTPReq != nil {
-		t.Error("HTTPReq should be nil for DB side effect")
+	if se.HTTP != nil {
+		t.Error("HTTP should be nil for DB side effect")
 	}
-	if se.HTTPResp != nil {
-		t.Error("HTTPResp should be nil for DB side effect")
+	if se.Database != nil {
+		t.Error("Database should be nil for zero DB side effect")
 	}
 }

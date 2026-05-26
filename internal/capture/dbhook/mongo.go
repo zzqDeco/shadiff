@@ -1,365 +1,148 @@
 package dbhook
 
 import (
-	"context"
 	"encoding/binary"
 	"encoding/json"
-	"io"
-	"net"
-	"sync"
 	"time"
 
-	"shadiff/internal/logger"
+	"shadiff/internal/dbtype"
 	"shadiff/internal/model"
 )
 
-// MongoHook is a MongoDB protocol proxy that parses the OP_MSG Wire Protocol
+// MongoHook is a MongoDB protocol proxy that parses the OP_MSG Wire Protocol.
 type MongoHook struct {
-	listenAddr  string
-	targetAddr  string
-	listener    net.Listener
-	sideEffects chan model.SideEffect
-	done        chan struct{}
-	wg          sync.WaitGroup
-	connsMu     sync.RWMutex
-	activeConns map[*activeConn]struct{}
+	*tcpProxy
 }
 
-// MongoDB Wire Protocol constants
+// MongoDB Wire Protocol constants.
 const (
-	opMsgOpCode = 2013 // OP_MSG
+	opMsgOpCode        = 2013 // OP_MSG
+	maxMongoMessageLen = 16 * 1024 * 1024
 )
+
+type mongoParser struct {
+	buf []byte
+}
 
 func NewMongoHook(listenAddr, targetAddr string) *MongoHook {
 	return &MongoHook{
-		listenAddr:  listenAddr,
-		targetAddr:  targetAddr,
-		sideEffects: make(chan model.SideEffect, 1000),
-		done:        make(chan struct{}),
-		activeConns: make(map[*activeConn]struct{}),
+		tcpProxy: newTCPProxy(dbtype.Mongo, listenAddr, targetAddr, func() protocolParser {
+			return &mongoParser{}
+		}),
 	}
 }
 
-func (h *MongoHook) Type() string { return "mongo" }
+func (p *mongoParser) Feed(data []byte) []model.SideEffect {
+	p.buf = append(p.buf, data...)
 
-func (h *MongoHook) SideEffects() <-chan model.SideEffect {
-	return h.sideEffects
-}
-
-func (h *MongoHook) Start(ctx context.Context) error {
-	var err error
-	h.listener, err = net.Listen("tcp", h.listenAddr)
-	if err != nil {
-		return err
-	}
-
-	logger.DBHookEvent("started", "mongo", "listen", h.listenAddr, "target", h.targetAddr)
-
-	h.wg.Add(1)
-	go func() {
-		defer h.wg.Done()
-		for {
-			select {
-			case <-h.done:
-				return
-			default:
-			}
-
-			conn, err := h.listener.Accept()
-			if err != nil {
-				select {
-				case <-h.done:
-					return
-				default:
-					logger.Error("mongo accept error", err)
-					continue
-				}
-			}
-
-			h.wg.Add(1)
-			go func() {
-				defer h.wg.Done()
-				h.handleConn(conn)
-			}()
+	var effects []model.SideEffect
+	for len(p.buf) >= 16 {
+		msgLen := int(binary.LittleEndian.Uint32(p.buf[0:4]))
+		if msgLen < 16 || msgLen > maxMongoMessageLen {
+			p.buf = nil
+			return effects
 		}
-	}()
-
-	return nil
-}
-
-func (h *MongoHook) Flush(ctx context.Context) error {
-	for _, conn := range h.snapshotActiveConns() {
-		ack := make(chan struct{})
-		select {
-		case conn.flushCh <- ack:
-		case <-conn.done:
-			continue
-		case <-ctx.Done():
-			return ctx.Err()
-		}
-
-		select {
-		case <-ack:
-		case <-conn.done:
-		case <-ctx.Done():
-			return ctx.Err()
-		}
-	}
-	return nil
-}
-
-func (h *MongoHook) Stop() error {
-	close(h.done)
-	if h.listener != nil {
-		h.listener.Close()
-	}
-	h.wg.Wait()
-	close(h.sideEffects)
-	return nil
-}
-
-func (h *MongoHook) handleConn(clientConn net.Conn) {
-	defer clientConn.Close()
-
-	serverConn, err := net.DialTimeout("tcp", h.targetAddr, 10*time.Second)
-	if err != nil {
-		logger.Error("mongo connect target failed", err)
-		return
-	}
-	defer serverConn.Close()
-
-	conn := &activeConn{
-		client:  clientConn,
-		server:  serverConn,
-		flushCh: make(chan chan struct{}),
-		done:    make(chan struct{}),
-	}
-	h.registerConn(conn)
-	defer h.unregisterConn(conn)
-
-	var wg sync.WaitGroup
-
-	// Server -> Client (passthrough)
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		io.Copy(clientConn, serverConn)
-	}()
-
-	// Client -> Server (sniff)
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		defer close(conn.done)
-		h.sniffClientToServer(conn)
-	}()
-
-	wg.Wait()
-}
-
-func (h *MongoHook) sniffClientToServer(conn *activeConn) {
-	for {
-		select {
-		case ack := <-conn.flushCh:
-			h.flushConn(conn)
-			close(ack)
-			continue
-		default:
-		}
-
-		// MongoDB Wire Protocol header: 4-byte message length (little-endian)
-		header := make([]byte, 16)
-		_ = conn.client.SetReadDeadline(time.Now().Add(hookReadPollInterval))
-		if _, err := io.ReadFull(conn.client, header); err != nil {
-			if ne, ok := err.(net.Error); ok && ne.Timeout() {
-				continue
-			}
-			return
-		}
-
-		msgLen := int(binary.LittleEndian.Uint32(header[0:4]))
-		// requestID := binary.LittleEndian.Uint32(header[4:8])
-		// responseTo := binary.LittleEndian.Uint32(header[8:12])
-		opCode := int(binary.LittleEndian.Uint32(header[12:16]))
-
-		// Read remaining message body
-		remaining := msgLen - 16
-		if remaining < 0 || remaining > 16*1024*1024 {
-			// Invalid message length, forward header then fall back to passthrough
-			conn.server.Write(header)
-			io.Copy(conn.server, conn.client)
-			return
-		}
-
-		body := make([]byte, remaining)
-		if _, err := io.ReadFull(conn.client, body); err != nil {
-			conn.server.Write(header)
-			return
-		}
-
-		// Forward the complete message
-		conn.server.Write(header)
-		conn.server.Write(body)
-
-		// Try to parse OP_MSG
-		if opCode == opMsgOpCode {
-			h.parseOpMsg(body)
-		}
-	}
-}
-
-func (h *MongoHook) flushConn(conn *activeConn) {
-	idleDeadline := time.Now().Add(hookFlushIdleWindow)
-	for {
-		remaining := time.Until(idleDeadline)
-		if remaining <= 0 {
-			return
-		}
-
-		header := make([]byte, 16)
-		_ = conn.client.SetReadDeadline(time.Now().Add(remaining))
-		if _, err := io.ReadFull(conn.client, header); err != nil {
-			if ne, ok := err.(net.Error); ok && ne.Timeout() {
-				return
-			}
-			return
-		}
-
-		msgLen := int(binary.LittleEndian.Uint32(header[0:4]))
-		opCode := int(binary.LittleEndian.Uint32(header[12:16]))
-		remainingBody := msgLen - 16
-		if remainingBody < 0 || remainingBody > 16*1024*1024 {
-			conn.server.Write(header)
-			io.Copy(conn.server, conn.client)
-			return
-		}
-
-		body := make([]byte, remainingBody)
-		if _, err := io.ReadFull(conn.client, body); err != nil {
-			conn.server.Write(header)
-			return
-		}
-
-		conn.server.Write(header)
-		conn.server.Write(body)
-		if opCode == opMsgOpCode {
-			h.parseOpMsg(body)
-		}
-		idleDeadline = time.Now().Add(hookFlushIdleWindow)
-	}
-}
-
-// parseOpMsg parses a MongoDB OP_MSG message
-func (h *MongoHook) parseOpMsg(body []byte) {
-	if len(body) < 5 {
-		return
-	}
-
-	// flagBits (4 bytes) + sections
-	// _ = binary.LittleEndian.Uint32(body[0:4])
-	offset := 4
-
-	for offset < len(body) {
-		if offset >= len(body) {
+		if len(p.buf) < msgLen {
 			break
 		}
 
+		opCode := int(binary.LittleEndian.Uint32(p.buf[12:16]))
+		if opCode == opMsgOpCode {
+			effects = append(effects, parseOpMsg(p.buf[16:msgLen])...)
+		}
+		p.buf = p.buf[msgLen:]
+	}
+
+	if len(p.buf) > maxMongoMessageLen {
+		p.buf = nil
+	}
+	return effects
+}
+
+// parseOpMsg parses a MongoDB OP_MSG body.
+func parseOpMsg(body []byte) []model.SideEffect {
+	if len(body) < 5 {
+		return nil
+	}
+
+	var effects []model.SideEffect
+	offset := 4 // flagBits
+	for offset < len(body) {
 		kind := body[offset]
 		offset++
 
 		switch kind {
 		case 0: // Body section (single BSON document)
 			if offset+4 > len(body) {
-				return
+				return effects
 			}
 			docLen := int(binary.LittleEndian.Uint32(body[offset : offset+4]))
 			if docLen < 5 || offset+docLen > len(body) {
-				return
+				return effects
 			}
-
-			doc := body[offset : offset+docLen]
-			h.extractMongoCommand(doc)
+			if effect, ok := extractMongoCommand(body[offset : offset+docLen]); ok {
+				effects = append(effects, effect)
+			}
 			offset += docLen
-
 		case 1: // Document Sequence section
 			if offset+4 > len(body) {
-				return
+				return effects
 			}
 			secLen := int(binary.LittleEndian.Uint32(body[offset : offset+4]))
 			if secLen < 4 || offset+secLen > len(body) {
-				return
+				return effects
 			}
 			offset += secLen
-
 		default:
-			return
+			return effects
 		}
 	}
+
+	return effects
 }
 
 // extractMongoCommand extracts MongoDB command information from a BSON document.
-// Simplified implementation: converts BSON to JSON-parseable format to extract command type and parameters.
-func (h *MongoHook) extractMongoCommand(bsonDoc []byte) {
-	// Simplified handling: try basic BSON parsing to extract the first key-value pair.
-	// Full BSON parsing requires the bson library; here we do basic extraction.
+func extractMongoCommand(bsonDoc []byte) (model.SideEffect, bool) {
 	doc := simpleBSONToMap(bsonDoc)
 	if doc == nil {
-		return
+		return model.SideEffect{}, false
 	}
 
-	effect := model.SideEffect{
-		Type:      model.SideEffectDB,
-		DBType:    "mongo",
-		Timestamp: time.Now().UnixMilli(),
-	}
-
-	// Extract database name
+	payload := model.MongoSideEffect{}
 	if db, ok := doc["$db"]; ok {
 		if dbStr, ok := db.(string); ok {
-			effect.Database = dbStr
+			payload.Database = dbStr
 		}
 	}
 
-	// Identify command type and collection name
 	mongoCommands := []string{"find", "insert", "update", "delete", "aggregate", "count", "distinct", "findAndModify"}
 	for _, cmd := range mongoCommands {
 		if coll, ok := doc[cmd]; ok {
-			effect.Operation = cmd
+			payload.Operation = cmd
 			if collStr, ok := coll.(string); ok {
-				effect.Collection = collStr
+				payload.Collection = collStr
 			}
 			break
 		}
 	}
-
-	if effect.Operation == "" {
-		return // Not a CRUD command, skip
+	if payload.Operation == "" {
+		return model.SideEffect{}, false
 	}
 
-	// Extract filter conditions
 	if filter, ok := doc["filter"]; ok {
-		effect.Filter = filter
+		payload.Filter = filter
 	}
-
-	// Extract update operations
 	if update, ok := doc["updates"]; ok {
-		effect.Update = update
+		payload.Update = update
 	}
-
-	// Extract inserted documents
 	if docs, ok := doc["documents"]; ok {
-		effect.Documents = docs
+		payload.Documents = docs
 	}
 
-	select {
-	case h.sideEffects <- effect:
-	default:
-		logger.Warn("mongo side effect channel full, dropping")
-	}
+	return model.NewMongoSideEffect(payload, time.Now().UnixMilli()), true
 }
 
-// simpleBSONToMap is a simplified BSON parser that extracts key-value pairs with string type.
-// A full implementation should use go.mongodb.org/mongo-driver/bson; this does basic extraction.
+// simpleBSONToMap is a simplified BSON parser that extracts JSON-friendly values.
 func simpleBSONToMap(data []byte) map[string]any {
 	if len(data) < 5 {
 		return nil
@@ -380,7 +163,6 @@ func simpleBSONToMap(data []byte) map[string]any {
 		elemType := data[offset]
 		offset++
 
-		// Read key (C string)
 		keyEnd := offset
 		for keyEnd < len(data) && data[keyEnd] != 0 {
 			keyEnd++
@@ -403,7 +185,6 @@ func simpleBSONToMap(data []byte) map[string]any {
 			}
 			result[key] = string(data[offset : offset+strLen-1])
 			offset += strLen
-
 		case 0x03, 0x04: // Document or Array
 			if offset+4 > len(data) {
 				return result
@@ -412,51 +193,41 @@ func simpleBSONToMap(data []byte) map[string]any {
 			if offset+subDocLen > len(data) {
 				return result
 			}
-			// Try to convert sub-document to a JSON-friendly format
-			subMap := simpleBSONToMap(data[offset : offset+subDocLen])
-			if subMap != nil {
+			if subMap := simpleBSONToMap(data[offset : offset+subDocLen]); subMap != nil {
 				result[key] = subMap
 			}
 			offset += subDocLen
-
 		case 0x10: // int32
 			if offset+4 > len(data) {
 				return result
 			}
 			result[key] = int(binary.LittleEndian.Uint32(data[offset : offset+4]))
 			offset += 4
-
 		case 0x12: // int64
 			if offset+8 > len(data) {
 				return result
 			}
 			result[key] = int64(binary.LittleEndian.Uint64(data[offset : offset+8]))
 			offset += 8
-
 		case 0x01: // double
 			if offset+8 > len(data) {
 				return result
 			}
-			offset += 8 // skip double
-
+			offset += 8
 		case 0x08: // boolean
 			if offset >= len(data) {
 				return result
 			}
 			result[key] = data[offset] != 0
 			offset++
-
 		case 0x0A: // null
 			result[key] = nil
-
-		case 0x07: // ObjectId (12 bytes)
+		case 0x07: // ObjectId
 			if offset+12 > len(data) {
 				return result
 			}
 			offset += 12
-
 		default:
-			// Unknown type, cannot continue parsing
 			return result
 		}
 	}
@@ -464,44 +235,25 @@ func simpleBSONToMap(data []byte) map[string]any {
 	return result
 }
 
-func (h *MongoHook) registerConn(conn *activeConn) {
-	h.connsMu.Lock()
-	defer h.connsMu.Unlock()
-	h.activeConns[conn] = struct{}{}
-}
-
-func (h *MongoHook) unregisterConn(conn *activeConn) {
-	h.connsMu.Lock()
-	defer h.connsMu.Unlock()
-	delete(h.activeConns, conn)
-}
-
-func (h *MongoHook) snapshotActiveConns() []*activeConn {
-	h.connsMu.RLock()
-	defer h.connsMu.RUnlock()
-
-	conns := make([]*activeConn, 0, len(h.activeConns))
-	for conn := range h.activeConns {
-		conns = append(conns, conn)
-	}
-	return conns
-}
-
-// MongoCommandToJSON converts a MongoDB command to a readable JSON string (for logging and reporting)
+// MongoCommandToJSON converts a MongoDB command to readable JSON for logging and reporting.
 func MongoCommandToJSON(effect model.SideEffect) string {
+	payload := effect.Mongo()
+	if payload == nil {
+		payload = &model.MongoSideEffect{}
+	}
 	cmd := map[string]any{
-		"operation":  effect.Operation,
-		"collection": effect.Collection,
-		"database":   effect.Database,
+		"operation":  payload.Operation,
+		"collection": payload.Collection,
+		"database":   payload.Database,
 	}
-	if effect.Filter != nil {
-		cmd["filter"] = effect.Filter
+	if payload.Filter != nil {
+		cmd["filter"] = payload.Filter
 	}
-	if effect.Update != nil {
-		cmd["update"] = effect.Update
+	if payload.Update != nil {
+		cmd["update"] = payload.Update
 	}
-	if effect.Documents != nil {
-		cmd["documents"] = effect.Documents
+	if payload.Documents != nil {
+		cmd["documents"] = payload.Documents
 	}
 	data, _ := json.Marshal(cmd)
 	return string(data)

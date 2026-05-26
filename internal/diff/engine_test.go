@@ -133,30 +133,22 @@ func TestEngineRun_ReplayFailureIsReported(t *testing.T) {
 func TestEngineRun_UsesSQLSideEffectComparer(t *testing.T) {
 	store, session := newDiffStore(t)
 	if err := store.AppendRecord(session.ID, &model.Record{
-		ID:        "orig-1",
-		SessionID: session.ID,
-		Sequence:  1,
-		Request:   model.HTTPRequest{Method: "GET", Path: "/items"},
-		Response:  model.HTTPResponse{StatusCode: 200, Body: []byte(`{"ok":true}`)},
-		SideEffects: []model.SideEffect{{
-			Type:   model.SideEffectDB,
-			DBType: "mysql",
-			Query:  "SELECT 1",
-		}},
+		ID:          "orig-1",
+		SessionID:   session.ID,
+		Sequence:    1,
+		Request:     model.HTTPRequest{Method: "GET", Path: "/items"},
+		Response:    model.HTTPResponse{StatusCode: 200, Body: []byte(`{"ok":true}`)},
+		SideEffects: []model.SideEffect{model.NewSQLSideEffect("mysql", "SELECT 1", 0)},
 	}); err != nil {
 		t.Fatalf("AppendRecord() error: %v", err)
 	}
 	if err := store.AppendReplayRecord(session.ID, &model.Record{
-		ID:        "replay-1",
-		SessionID: session.ID,
-		Sequence:  1,
-		Request:   model.HTTPRequest{Method: "GET", Path: "/items"},
-		Response:  model.HTTPResponse{StatusCode: 200, Body: []byte(`{"ok":true}`)},
-		SideEffects: []model.SideEffect{{
-			Type:   model.SideEffectDB,
-			DBType: "mysql",
-			Query:  "SELECT 2",
-		}},
+		ID:          "replay-1",
+		SessionID:   session.ID,
+		Sequence:    1,
+		Request:     model.HTTPRequest{Method: "GET", Path: "/items"},
+		Response:    model.HTTPResponse{StatusCode: 200, Body: []byte(`{"ok":true}`)},
+		SideEffects: []model.SideEffect{model.NewSQLSideEffect("mysql", "SELECT 2", 0)},
 	}); err != nil {
 		t.Fatalf("AppendReplayRecord() error: %v", err)
 	}
@@ -185,13 +177,11 @@ func TestEngineRun_UsesMongoSideEffectComparer(t *testing.T) {
 		Sequence:  1,
 		Request:   model.HTTPRequest{Method: "GET", Path: "/items"},
 		Response:  model.HTTPResponse{StatusCode: 200, Body: []byte(`{"ok":true}`)},
-		SideEffects: []model.SideEffect{{
-			Type:       model.SideEffectDB,
-			DBType:     "mongo",
+		SideEffects: []model.SideEffect{model.NewMongoSideEffect(model.MongoSideEffect{
 			Database:   "app",
 			Collection: "users",
 			Operation:  "find",
-		}},
+		}, 0)},
 	}); err != nil {
 		t.Fatalf("AppendRecord() error: %v", err)
 	}
@@ -201,13 +191,11 @@ func TestEngineRun_UsesMongoSideEffectComparer(t *testing.T) {
 		Sequence:  1,
 		Request:   model.HTTPRequest{Method: "GET", Path: "/items"},
 		Response:  model.HTTPResponse{StatusCode: 200, Body: []byte(`{"ok":true}`)},
-		SideEffects: []model.SideEffect{{
-			Type:       model.SideEffectDB,
-			DBType:     "mongo",
+		SideEffects: []model.SideEffect{model.NewMongoSideEffect(model.MongoSideEffect{
 			Database:   "app",
 			Collection: "users",
 			Operation:  "update",
-		}},
+		}, 0)},
 	}); err != nil {
 		t.Fatalf("AppendReplayRecord() error: %v", err)
 	}
@@ -231,34 +219,22 @@ func TestEngineRun_UsesMongoSideEffectComparer(t *testing.T) {
 func TestEngineRun_UsesRedisSideEffectComparer(t *testing.T) {
 	store, session := newDiffStore(t)
 	if err := store.AppendRecord(session.ID, &model.Record{
-		ID:        "orig-1",
-		SessionID: session.ID,
-		Sequence:  1,
-		Request:   model.HTTPRequest{Method: "GET", Path: "/items"},
-		Response:  model.HTTPResponse{StatusCode: 200, Body: []byte(`{"ok":true}`)},
-		SideEffects: []model.SideEffect{{
-			Type:         model.SideEffectDB,
-			DBType:       "redis",
-			RedisCommand: "SET",
-			RedisKey:     "user:1",
-			RedisArgs:    []string{"user:1", "old"},
-		}},
+		ID:          "orig-1",
+		SessionID:   session.ID,
+		Sequence:    1,
+		Request:     model.HTTPRequest{Method: "GET", Path: "/items"},
+		Response:    model.HTTPResponse{StatusCode: 200, Body: []byte(`{"ok":true}`)},
+		SideEffects: []model.SideEffect{model.NewRedisSideEffect("SET", "user:1", []string{"user:1", "old"}, 0)},
 	}); err != nil {
 		t.Fatalf("AppendRecord() error: %v", err)
 	}
 	if err := store.AppendReplayRecord(session.ID, &model.Record{
-		ID:        "replay-1",
-		SessionID: session.ID,
-		Sequence:  1,
-		Request:   model.HTTPRequest{Method: "GET", Path: "/items"},
-		Response:  model.HTTPResponse{StatusCode: 200, Body: []byte(`{"ok":true}`)},
-		SideEffects: []model.SideEffect{{
-			Type:         model.SideEffectDB,
-			DBType:       "redis",
-			RedisCommand: "SET",
-			RedisKey:     "user:1",
-			RedisArgs:    []string{"user:1", "new"},
-		}},
+		ID:          "replay-1",
+		SessionID:   session.ID,
+		Sequence:    1,
+		Request:     model.HTTPRequest{Method: "GET", Path: "/items"},
+		Response:    model.HTTPResponse{StatusCode: 200, Body: []byte(`{"ok":true}`)},
+		SideEffects: []model.SideEffect{model.NewRedisSideEffect("SET", "user:1", []string{"user:1", "new"}, 0)},
 	}); err != nil {
 		t.Fatalf("AppendReplayRecord() error: %v", err)
 	}
