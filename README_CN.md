@@ -133,6 +133,16 @@ Docker-backed 数据库集成测试是可选测试，不包含在默认单元测
 go test -v -tags integration ./internal/integration -count=1 -timeout=20m
 ```
 
+### 官方 E2E Demo
+
+运行可复现的 Docker Compose demo，使用真实 CLI 跑完整 `record -> replay -> diff -> report`，并覆盖 HTTP、MySQL、PostgreSQL 和 MongoDB side effects：
+
+```bash
+./examples/e2e/run.sh --assert
+```
+
+Demo 会把隔离产物写到 `examples/e2e/.work/<run-id>/`，包括 `diff.json` 和 `report.html`。端口、预期差异和排障说明见 `examples/e2e/README.md`。
+
 ## 使用方法
 
 ### 1. 录制流量

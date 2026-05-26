@@ -1,0 +1,102 @@
+services:
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: shadiff-pass
+      MYSQL_DATABASE: shadiff
+    ports:
+      - "127.0.0.1:33306:3306"
+    volumes:
+      - ./init/mysql.sql:/docker-entrypoint-initdb.d/001-shadiff.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$${MYSQL_ROOT_PASSWORD} --silent"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_PASSWORD: shadiff-pass
+      POSTGRES_DB: shadiff
+    ports:
+      - "127.0.0.1:35432:5432"
+    volumes:
+      - ./init/postgres.sql:/docker-entrypoint-initdb.d/001-shadiff.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d shadiff"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  mongo:
+    image: mongo:7
+    ports:
+      - "127.0.0.1:37017:27017"
+    volumes:
+      - ./init/mongo.js:/docker-entrypoint-initdb.d/001-shadiff.js:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet --eval 'db.adminCommand({ ping: 1 }).ok' | grep 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  old-api:
+    build:
+      context: ../..
+      dockerfile: examples/e2e/api/Dockerfile
+      network: host
+      args:
+        GOPROXY: ${SHADIFF_E2E_GOPROXY:-https://proxy.golang.org,direct}
+    environment:
+      API_VARIANT: old
+      HTTP_ADDR: :8080
+      MYSQL_DSN: root:shadiff-pass@tcp(host.docker.internal:13306)/shadiff?parseTime=true
+      POSTGRES_DSN: postgres://postgres:shadiff-pass@host.docker.internal:15432/shadiff?sslmode=disable
+      MONGO_URI: mongodb://host.docker.internal:27018/?directConnection=true
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "127.0.0.1:18081:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/health >/dev/null"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  new-api:
+    build:
+      context: ../..
+      dockerfile: examples/e2e/api/Dockerfile
+      network: host
+      args:
+        GOPROXY: ${SHADIFF_E2E_GOPROXY:-https://proxy.golang.org,direct}
+    environment:
+      API_VARIANT: new
+      HTTP_ADDR: :8080
+      MYSQL_DSN: root:shadiff-pass@tcp(host.docker.internal:13316)/shadiff?parseTime=true
+      POSTGRES_DSN: postgres://postgres:shadiff-pass@host.docker.internal:15442/shadiff?sslmode=disable
+      MONGO_URI: mongodb://host.docker.internal:27028/?directConnection=true
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "127.0.0.1:18082:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/health >/dev/null"]
+      interval: 5s
+      timeout: 3s
+      retries: 30

@@ -133,6 +133,16 @@ Docker-backed database integration tests are opt-in and are not part of the defa
 go test -v -tags integration ./internal/integration -count=1 -timeout=20m
 ```
 
+### Official E2E Demo
+
+Run the reproducible Docker Compose demo to exercise the real CLI across `record -> replay -> diff -> report` with HTTP, MySQL, PostgreSQL, and MongoDB side effects:
+
+```bash
+./examples/e2e/run.sh --assert
+```
+
+The demo writes isolated artifacts under `examples/e2e/.work/<run-id>/`, including `diff.json` and `report.html`. See `examples/e2e/README.md` for ports, expected differences, and troubleshooting.
+
 ## Usage
 
 ### 1. Record Traffic
