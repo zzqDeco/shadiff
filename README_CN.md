@@ -359,7 +359,7 @@ CLI flag > config.json > 内置默认值
 
 ## Side-effect 存储说明
 
-从 `v0.4.0` 开始，数据库副作用使用 typed JSON payload，例如 `database.sql`、`database.mongo` 和 `database.redis`。`v0.3.x` 及更早版本录制的 session 使用旧 flat 字段，本版本不做迁移。
+从 `v0.4.0` 开始，当前唯一的数据库副作用存储约定是 typed JSON payload，例如 `database.sql`、`database.mongo` 和 `database.redis`。`v0.3.x` 及更早版本录制的 session 使用旧 flat 字段，当前 diff/report 流程不做迁移，也不支持读取旧格式。
 
 ## 文档
 

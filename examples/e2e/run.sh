@@ -22,7 +22,7 @@ Usage: examples/e2e/run.sh [--assert] [--keep]
 Runs the official Shadiff Docker Compose E2E demo.
 
 Options:
-  --assert  Verify that diff.json contains expected SQL and MongoDB differences.
+  --assert  Verify that diff.json contains expected SQL, MongoDB, and Redis differences.
   --keep    Keep Docker Compose services running after the script exits.
 USAGE
 }

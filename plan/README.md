@@ -24,6 +24,7 @@
 | `plan/v0.2.0-e2e-usability.plan.md` | Add an official reproducible E2E demo across HTTP and DB side effects | Completed |
 | `plan/redis-sideeffects.plan.md` | Add Redis DB proxy capture, replay attribution, semantic diff, integration tests, and E2E demo coverage | Completed |
 | `plan/sideeffect-architecture-refactor.plan.md` | Refactor side-effect payloads, DB type registry, diff comparer dispatch, and DB hook TCP lifecycle | Completed |
+| `plan/v0.4-sideeffect-regression.plan.md` | Harden v0.4 typed side-effect JSON, diff registry, reporter output, and E2E assertions | Completed |
 
 ## Phase History
 

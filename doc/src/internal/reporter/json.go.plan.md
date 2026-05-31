@@ -29,6 +29,7 @@
   - Uses `json.NewEncoder` with `SetIndent("", "  ")` for human-readable output (2-space indentation).
   - The JSON structure places `summary` before `results` in the output, matching the struct field order.
   - Encoding errors (e.g., from unencodable values in `any`-typed fields like `Expected`/`Actual`) are propagated to the caller.
+  - Regression coverage includes SQL, MongoDB, and Redis side-effect difference kinds in JSON report output.
 
 ## 5. Dependencies
 - Internal: `shadiff/internal/model` (for `model.DiffResult`, `model.DiffSummary`).
