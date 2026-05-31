@@ -20,6 +20,7 @@
 - `defaultSideEffectComparers` registers SQL (`mysql`, `postgres`), MongoDB, and Redis comparers.
 - `CompareSideEffects()` is the public package entrypoint used by the engine.
 - Residual side effects are counted based on DB types not claimed by registered comparers.
+- Regression tests verify registry coverage for every supported DB type, SQL/MongoDB/Redis dispatch through the registry, and residual counting for unhandled side effects.
 
 ## 5. Dependencies
 - Internal: `dbtype`, `model`.

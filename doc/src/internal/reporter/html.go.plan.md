@@ -34,6 +34,7 @@
   - Ignored differences are rendered with a line-through style and gray text.
   - Severity badges are color-coded: red background for error, amber for warning, blue for info.
   - The template is parsed fresh on every `Generate` call (not cached).
+  - Regression coverage includes SQL, MongoDB, and Redis side-effect difference paths and values in HTML output.
 
 ## 5. Dependencies
 - Internal: `shadiff/internal/model` (for `model.DiffResult`, `model.DiffSummary`, `model.Severity`, `model.SeverityError`, `model.SeverityWarning`).

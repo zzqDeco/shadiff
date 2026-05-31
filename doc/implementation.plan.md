@@ -107,6 +107,7 @@ This document maps every package, source file, and key implementation pattern in
 | `redis.go` | `CompareRedisSideEffects()` for Redis; compares command count, command name, primary key, and arguments |
 | `json_test.go` | Tests for JSON structural diff |
 | `db_test.go` | Tests for SQL side effect comparison |
+| `sideeffects_test.go` | Tests for comparer registry coverage, SQL/MongoDB/Redis dispatch, and residual side-effect counting |
 | `rule_loader_test.go` | Tests for JSON/YAML rule loading and config-to-diff rule conversion |
 | `mongo_test.go` | Tests for MongoDB side effect comparison |
 | `rules_test.go` | Tests for rule matching and path wildcard compilation |
@@ -126,7 +127,7 @@ This document maps every package, source file, and key implementation pattern in
 | `request.go` | `HTTPRequest` struct (Method, Path, Query, Headers, Body, BodyLen); `HTTPResponse` struct (StatusCode, Headers, Body, BodyLen) |
 | `sideeffect.go` | `SideEffect` envelope with typed payloads: `DatabaseSideEffect` (`SQL`, `Mongo`, `Redis`) and `HTTPSideEffect`; includes constructors and safe accessors |
 | `diff.go` | `DiffResult` struct; `DifferenceKind` enum (status_code, header, body, body_field, db_query, db_query_count, mongo_op, redis_command, redis_command_count, external_call); `Severity` enum; `Difference` struct; `DiffSummary` struct |
-| `model_test.go` | Tests for model types |
+| `model_test.go` | Tests for model types, including the v0.4 typed side-effect JSON payload contract |
 
 ### `internal/replay/` -- Replay Engine
 
@@ -145,7 +146,7 @@ This document maps every package, source file, and key implementation pattern in
 | `terminal.go` | `TerminalReporter`; ANSI-colored output with unicode tree connectors; color-coded severity levels |
 | `json.go` | `JSONReporter`; outputs `{ "summary": ..., "results": [...] }` with indentation |
 | `html.go` | `HTMLReporter`; self-contained HTML page with embedded CSS via Go `html/template`; responsive card layout with color-coded match/diff status |
-| `reporter_test.go` | Tests for reporter implementations |
+| `reporter_test.go` | Tests for reporter implementations, including SQL/MongoDB/Redis side-effect difference output |
 
 ### `internal/storage/` -- Persistence
 
