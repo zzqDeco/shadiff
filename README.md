@@ -359,7 +359,7 @@ Supported types: `mysql`, `postgres`, `mongo`, `redis`. Can be specified multipl
 
 ## Side-effect Storage Note
 
-Starting with `v0.4.0`, database side effects use typed JSON payloads such as `database.sql`, `database.mongo`, and `database.redis`. Sessions recorded by `v0.3.x` and earlier used flat fields and are not migrated.
+Starting with `v0.4.0`, the current and only database side-effect storage contract uses typed JSON payloads such as `database.sql`, `database.mongo`, and `database.redis`. Sessions recorded by `v0.3.x` and earlier used flat fields and are not migrated or supported by current diff/report flows.
 
 ## Documentation
 

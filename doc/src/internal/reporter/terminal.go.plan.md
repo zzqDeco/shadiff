@@ -31,6 +31,7 @@
   - Non-ignored differences show expected vs. actual values and a severity badge colored by level: red for error, yellow for warning, cyan for info.
   - If the request path is empty, it defaults to `"/"`.
   - The summary section shows total/matched/diff counts, optional ignored and critical counts, and the match rate as a bold percentage.
+  - Regression coverage includes SQL, MongoDB, and Redis side-effect difference paths and values.
 
 ## 5. Dependencies
 - Internal: `shadiff/internal/model` (for `model.DiffResult`, `model.DiffSummary`, `model.SeverityWarning`, `model.SeverityInfo`, `model.Severity`).

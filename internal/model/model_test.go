@@ -372,6 +372,84 @@ func TestSideEffect_JSONUsesTypedPayload(t *testing.T) {
 	}
 }
 
+func TestRecordSideEffects_JSONUsesTypedDatabasePayloads(t *testing.T) {
+	record := Record{
+		ID:        "rec-typed-sideeffects",
+		SessionID: "session-typed-sideeffects",
+		Sequence:  1,
+		SideEffects: []SideEffect{
+			NewSQLSideEffect("mysql", "SELECT 1", 1700000000000),
+			NewSQLSideEffect("postgres", "SELECT 2", 1700000000001),
+			NewMongoSideEffect(MongoSideEffect{
+				Database:   "app",
+				Collection: "users",
+				Operation:  "find",
+			}, 1700000000002),
+			NewRedisSideEffect("SET", "user:1", []string{"user:1", "ada"}, 1700000000003),
+		},
+	}
+
+	data, err := json.Marshal(record)
+	if err != nil {
+		t.Fatalf("Marshal() error: %v", err)
+	}
+
+	var parsed struct {
+		SideEffects []map[string]any `json:"sideEffects"`
+	}
+	if err := json.Unmarshal(data, &parsed); err != nil {
+		t.Fatalf("Unmarshal() error: %v", err)
+	}
+	if len(parsed.SideEffects) != 4 {
+		t.Fatalf("sideEffects count = %d, want 4", len(parsed.SideEffects))
+	}
+
+	assertNoRemovedTopLevelSideEffectFields := func(t *testing.T, effect map[string]any) {
+		t.Helper()
+		for _, removedField := range []string{"dbType", "query", "collection", "redisCommand", "redisKey", "redisArgs"} {
+			if _, ok := effect[removedField]; ok {
+				t.Fatalf("side effect JSON contains removed top-level field %q: %s", removedField, string(data))
+			}
+		}
+	}
+	assertDatabasePayload := func(t *testing.T, index int, dbType, payloadField string) map[string]any {
+		t.Helper()
+		effect := parsed.SideEffects[index]
+		assertNoRemovedTopLevelSideEffectFields(t, effect)
+		if effect["type"] != string(SideEffectDB) {
+			t.Fatalf("sideEffects[%d].type = %v, want %q", index, effect["type"], SideEffectDB)
+		}
+		database, ok := effect["database"].(map[string]any)
+		if !ok {
+			t.Fatalf("sideEffects[%d].database missing or wrong type: %T", index, effect["database"])
+		}
+		if database["type"] != dbType {
+			t.Fatalf("sideEffects[%d].database.type = %v, want %q", index, database["type"], dbType)
+		}
+		if _, ok := database[payloadField]; !ok {
+			t.Fatalf("sideEffects[%d].database missing payload %q: %#v", index, payloadField, database)
+		}
+		return database
+	}
+
+	mysql := assertDatabasePayload(t, 0, "mysql", "sql")
+	if mysql["sql"].(map[string]any)["query"] != "SELECT 1" {
+		t.Fatalf("mysql sql query = %v, want SELECT 1", mysql["sql"].(map[string]any)["query"])
+	}
+	postgres := assertDatabasePayload(t, 1, "postgres", "sql")
+	if postgres["sql"].(map[string]any)["query"] != "SELECT 2" {
+		t.Fatalf("postgres sql query = %v, want SELECT 2", postgres["sql"].(map[string]any)["query"])
+	}
+	mongo := assertDatabasePayload(t, 2, "mongo", "mongo")
+	if mongo["mongo"].(map[string]any)["collection"] != "users" {
+		t.Fatalf("mongo collection = %v, want users", mongo["mongo"].(map[string]any)["collection"])
+	}
+	redis := assertDatabasePayload(t, 3, "redis", "redis")
+	if redis["redis"].(map[string]any)["command"] != "SET" {
+		t.Fatalf("redis command = %v, want SET", redis["redis"].(map[string]any)["command"])
+	}
+}
+
 // --- Diff ---
 
 func TestDifferenceKind_Constants(t *testing.T) {
@@ -387,6 +465,8 @@ func TestDifferenceKind_Constants(t *testing.T) {
 		{"db_query", DiffDBQuery, "db_query"},
 		{"db_query_count", DiffDBQueryCount, "db_query_count"},
 		{"mongo_op", DiffMongoOp, "mongo_op"},
+		{"redis_command", DiffRedisCommand, "redis_command"},
+		{"redis_command_count", DiffRedisCount, "redis_command_count"},
 		{"external_call", DiffExternalCall, "external_call"},
 	}
 	for _, tt := range tests {

@@ -432,7 +432,7 @@ Side effects are persisted as typed payloads. A database effect uses this v0.4.0
 }
 ```
 
-SQL databases use `database.sql`, MongoDB uses `database.mongo`, Redis uses `database.redis`, and external HTTP calls use `http`. The previous flat DB fields (`dbType`, `query`, `collection`, `redisCommand`, etc.) are not part of the v0.4.0 storage contract.
+SQL databases use `database.sql`, MongoDB uses `database.mongo`, Redis uses `database.redis`, and external HTTP calls use `http`. This typed payload shape is the current v0.4 storage contract. The previous flat DB fields (`dbType`, `query`, `collection`, `redisCommand`, etc.) are not part of the v0.4 storage contract and are not migrated or supported by current diff/report flows.
 
 ### 3.3 JSONL for Persistence
 

@@ -39,7 +39,7 @@
 - Changes affect `Record` (record.go) since records contain a `SideEffect` slice.
 - Diff engine logic that compares side effects consumes typed payload accessors rather than flat fields.
 - Adding new `SideEffectType` values requires corresponding diff logic and capture hook implementations.
-- This v0.4.0 shape intentionally breaks compatibility with v0.3.x flat side-effect JSON.
+- This v0.4 shape intentionally breaks compatibility with v0.3.x flat side-effect JSON; current tests assert that removed flat DB fields do not reappear at the `sideEffects[]` top level.
 
 ## 7. Maintenance Notes
 - Keep one typed database payload populated per database side effect.

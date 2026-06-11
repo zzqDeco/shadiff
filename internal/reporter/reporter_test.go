@@ -65,6 +65,55 @@ func sampleData() ([]model.DiffResult, model.DiffSummary) {
 	return results, summary
 }
 
+func sideEffectDiffData() ([]model.DiffResult, model.DiffSummary) {
+	results := []model.DiffResult{
+		{
+			RecordID: "rec-sideeffects",
+			Sequence: 1,
+			Request: model.HTTPRequest{
+				Method: "GET",
+				Path:   "/api/users/1",
+			},
+			Match: false,
+			Differences: []model.Difference{
+				{
+					Kind:     model.DiffDBQuery,
+					Path:     "sideEffects.db[0].query",
+					Expected: "SELECT * FROM users WHERE id = 1",
+					Actual:   "SELECT * FROM accounts WHERE id = 1",
+					Message:  "SQL statement differs",
+					Severity: model.SeverityError,
+				},
+				{
+					Kind:     model.DiffMongoOp,
+					Path:     "sideEffects.mongo[0].collection",
+					Expected: "profiles",
+					Actual:   "accounts",
+					Message:  "MongoDB collection differs",
+					Severity: model.SeverityError,
+				},
+				{
+					Kind:     model.DiffRedisCommand,
+					Path:     "sideEffects.redis[0].key",
+					Expected: "user:1",
+					Actual:   "account:1",
+					Message:  "Redis key differs",
+					Severity: model.SeverityError,
+				},
+			},
+		},
+	}
+
+	summary := model.DiffSummary{
+		SessionID:  "session-sideeffects",
+		TotalCount: 1,
+		DiffCount:  1,
+		ErrorCount: 3,
+	}
+
+	return results, summary
+}
+
 // --- NewReporter factory tests ---
 
 func TestNewReporter_Terminal(t *testing.T) {
@@ -194,6 +243,30 @@ func TestJSONReporter_Generate_EmptyResults(t *testing.T) {
 	}
 }
 
+func TestJSONReporter_Generate_SideEffectDifferences(t *testing.T) {
+	results, summary := sideEffectDiffData()
+	r := &JSONReporter{}
+	var buf bytes.Buffer
+
+	if err := r.Generate(results, summary, &buf); err != nil {
+		t.Fatalf("Generate error: %v", err)
+	}
+
+	output := buf.String()
+	for _, want := range []string{
+		`"kind": "db_query"`,
+		`"kind": "mongo_op"`,
+		`"kind": "redis_command"`,
+		"SELECT * FROM users WHERE id = 1",
+		"profiles",
+		"user:1",
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("JSON output missing %q:\n%s", want, output)
+		}
+	}
+}
+
 // --- HTMLReporter.Generate tests ---
 
 func TestHTMLReporter_Generate_ValidHTML(t *testing.T) {
@@ -250,6 +323,30 @@ func TestHTMLReporter_Generate_Content(t *testing.T) {
 	// Match rate 50.0%
 	if !strings.Contains(output, "50.0") {
 		t.Error("output missing match rate percentage")
+	}
+}
+
+func TestHTMLReporter_Generate_SideEffectDifferences(t *testing.T) {
+	results, summary := sideEffectDiffData()
+	r := &HTMLReporter{}
+	var buf bytes.Buffer
+
+	if err := r.Generate(results, summary, &buf); err != nil {
+		t.Fatalf("Generate error: %v", err)
+	}
+
+	output := buf.String()
+	for _, want := range []string{
+		"sideEffects.db[0].query",
+		"SELECT * FROM users WHERE id = 1",
+		"sideEffects.mongo[0].collection",
+		"profiles",
+		"sideEffects.redis[0].key",
+		"user:1",
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("HTML output missing %q:\n%s", want, output)
+		}
 	}
 }
 
@@ -347,5 +444,29 @@ func TestTerminalReporter_Generate_ErrorCount(t *testing.T) {
 	}
 	if !strings.Contains(output, "1 differences (rule matched)") {
 		t.Error("output missing ignore count line")
+	}
+}
+
+func TestTerminalReporter_Generate_SideEffectDifferences(t *testing.T) {
+	results, summary := sideEffectDiffData()
+	r := &TerminalReporter{}
+	var buf bytes.Buffer
+
+	if err := r.Generate(results, summary, &buf); err != nil {
+		t.Fatalf("Generate error: %v", err)
+	}
+
+	output := buf.String()
+	for _, want := range []string{
+		"sideEffects.db[0].query",
+		"SELECT * FROM users WHERE id = 1",
+		"sideEffects.mongo[0].collection",
+		"profiles",
+		"sideEffects.redis[0].key",
+		"user:1",
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("terminal output missing %q:\n%s", want, output)
+		}
 	}
 }
