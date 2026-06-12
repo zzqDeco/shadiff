@@ -145,8 +145,9 @@ This document maps every package, source file, and key implementation pattern in
 |------|-------------|
 | `reporter.go` | `Reporter` interface; `NewReporter(format)` factory function dispatching to terminal/json/html |
 | `terminal.go` | `TerminalReporter`; ANSI-colored output with unicode tree connectors; color-coded severity levels |
-| `json.go` | `JSONReporter`; outputs `{ "summary": ..., "results": [...] }` with indentation |
+| `json.go` | `JSONReporter`; outputs `{ "summary": ..., "differenceSummary": ..., "results": [...] }` with indentation |
 | `html.go` | `HTMLReporter`; self-contained HTML page with embedded CSS via Go `html/template`; responsive card layout with color-coded match/diff status |
+| `summary.go` | Difference summary helper grouping report differences by HTTP, SQL, MongoDB, Redis, and unknown side-effect categories |
 | `reporter_test.go` | Tests for reporter implementations, including SQL/MongoDB/Redis side-effect difference output |
 
 ### `internal/storage/` -- Persistence

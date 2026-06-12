@@ -8,7 +8,7 @@
 - Module: shadiff (package cmd)
 
 ## 2. Core Responsibility
-- Implements the `session` command group with three subcommands: `list`, `show`, and `delete`.
+- Implements the `session` command group with four subcommands: `list`, `show`, `inspect`, and `delete`.
 - Provides CRUD-like management of recording sessions stored on disk.
 - Contains the shared `getStore()` helper that creates a `storage.FileStore` instance pointing to `~/.shadiff`.
 - Changes to this file should be kept in sync with project-level documentation.
@@ -17,11 +17,13 @@
 - Input sources:
   - `session list`: Optional `--tag` flag to filter sessions by tag.
   - `session show <id>`: Positional argument specifying the session ID.
+  - `session inspect <id>`: Positional argument specifying the session ID or name, with optional `--format terminal|json`.
   - `session delete <id>`: Positional argument specifying the session ID.
   - All subcommands read session data from the file store at `~/.shadiff`.
 - Output results:
   - `session list`: Tabular output to stdout with columns: ID, NAME, STATUS, RECORDS, CREATED.
   - `session show`: Detailed key-value display of a single session's metadata.
+  - `session inspect`: Artifact status, record/replay/diff counts, storage paths, and DB side-effect counts by type.
   - `session delete`: Confirmation message after successful deletion.
 
 ## 4. Key Implementation Details
@@ -31,6 +33,7 @@
   - `getStore() (*storage.FileStore, error)` -- Creates a FileStore rooted at `~/.shadiff`. Used by `session` subcommands and also available to other cmd files in the same package.
   - `runSessionList(cmd *cobra.Command, args []string) error` -- Lists sessions, optionally filtered by tag.
   - `runSessionShow(cmd *cobra.Command, args []string) error` -- Displays detailed metadata for a single session.
+  - `runSessionInspect(cmd *cobra.Command, args []string) error` -- Builds and prints a session inspection report in terminal or JSON format.
   - `runSessionDelete(cmd *cobra.Command, args []string) error` -- Deletes a session after verifying it exists.
 - Package-level variables:
   - `sessionTagFilter string` -- Holds the `--tag` flag value for list filtering.
@@ -39,13 +42,14 @@
   - Timestamps are stored as Unix milliseconds (`CreatedAt`, `UpdatedAt`) and formatted as `"2006-01-02 15:04"` or `"2006-01-02 15:04:05"`.
   - `session delete` performs a two-step process: first verifies the session exists via `store.Get()`, then deletes it. This prevents silent failures on invalid IDs.
   - `session show` displays Source and Target base URLs, tags, record count, and timestamps.
+  - `session inspect` resolves sessions by ID or name, treats missing replay/diff artifacts as warnings, and exits successfully when the session exists.
 
 ## 5. Dependencies
 - Internal:
   - `shadiff/internal/model` -- `Session`, `SessionFilter` types.
   - `shadiff/internal/storage` -- `FileStore` for persistent session storage.
 - External:
-  - `fmt`, `os` (standard library) -- Output and home directory resolution.
+  - `encoding/json`, `fmt`, `io`, `os`, `path/filepath`, `sort` (standard library) -- Output, JSON rendering, writer abstraction, path resolution, and stable report ordering.
   - `text/tabwriter` (standard library) -- Aligned tabular output for `session list`.
   - `time` (standard library) -- Timestamp formatting.
   - `github.com/spf13/cobra` -- Command definition.
@@ -54,6 +58,7 @@
 - `getStore()` is used by other command files (`record.go`, `replay.go`, `diff.go`, `report.go` each create their own store independently). If the data directory logic changes, all files need updating; consider centralizing.
 - Changes to `model.Session` fields require updates to the `show` and `list` output formatting.
 - Adding new session subcommands (e.g., `session rename`, `session export`) should follow the pattern established here: define a `cobra.Command`, wire it in `init()`, implement a `runSessionXxx` handler.
+- Changes to side-effect model database type names affect `session inspect` count output.
 
 ## 7. Maintenance Notes
 - The `getStore()` function duplicates data directory resolution (`~/.shadiff`) that also appears in `record.go`, `replay.go`, `diff.go`, and `report.go`. A future refactor could centralize this into a shared helper or configuration.
