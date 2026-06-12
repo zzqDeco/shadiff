@@ -55,10 +55,19 @@ func (r *TerminalReporter) Generate(results []model.DiffResult, summary model.Di
 	}
 
 	// Summary
+	diffSummary := SummarizeDifferences(results)
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "────────────────")
 	fmt.Fprintf(w, "Total: %d records, %d matched, %d differences\n",
 		summary.TotalCount, summary.MatchCount, summary.DiffCount)
+	if diffSummary.Total() > 0 || diffSummary.Ignored > 0 {
+		fmt.Fprintf(w, "Difference summary: HTTP=%d SQL=%d MongoDB=%d Redis=%d UnknownSideEffect=%d",
+			diffSummary.HTTP, diffSummary.SQL, diffSummary.MongoDB, diffSummary.Redis, diffSummary.UnknownSideEffect)
+		if diffSummary.Ignored > 0 {
+			fmt.Fprintf(w, " Ignored=%d", diffSummary.Ignored)
+		}
+		fmt.Fprintln(w)
+	}
 	if summary.IgnoreCount > 0 {
 		fmt.Fprintf(w, "Ignored: %d differences (rule matched)\n", summary.IgnoreCount)
 	}

@@ -159,6 +159,7 @@ Exclusions:
 | `internal/reporter/terminal.go` | `doc/src/internal/reporter/terminal.go.plan.md` | Reporter Implementation | reporter |
 | `internal/reporter/json.go` | `doc/src/internal/reporter/json.go.plan.md` | Reporter Implementation | reporter |
 | `internal/reporter/html.go` | `doc/src/internal/reporter/html.go.plan.md` | Reporter Implementation | reporter |
+| `internal/reporter/summary.go` | `doc/src/internal/reporter/summary.go.plan.md` | Reporter Helper | reporter |
 
 ### internal/logger/
 
