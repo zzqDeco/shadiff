@@ -11,7 +11,6 @@ jobs:
 
     env:
       SHADIFF_E2E_PROJECT: shadiff-e2e-${{ github.run_id }}
-      SHADIFF_E2E_SUMMARY: ${{ runner.temp }}/shadiff-e2e-summary.json
 
     steps:
       - name: Checkout
@@ -35,7 +34,7 @@ jobs:
         run: bash -n examples/e2e/run.sh
 
       - name: Run official E2E demo
-        run: ./examples/e2e/run.sh --assert --summary --summary-file "${SHADIFF_E2E_SUMMARY}"
+        run: ./examples/e2e/run.sh --assert --summary --summary-file "${RUNNER_TEMP}/shadiff-e2e-summary.json"
 
       - name: Upload E2E artifacts
         if: always()
