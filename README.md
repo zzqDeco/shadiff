@@ -139,6 +139,8 @@ Docker-backed database integration tests are opt-in and are not part of the defa
 go test -v -tags integration ./internal/integration -count=1 -timeout=20m
 ```
 
+The official E2E demo also has a manual GitHub Actions workflow named `E2E`. It runs the Docker Compose demo on demand and uploads the `.work` artifacts plus summary JSON for inspection.
+
 ### Official E2E Demo
 
 Run the reproducible Docker Compose demo to exercise the real CLI across `record -> replay -> diff -> report` with HTTP, MySQL, PostgreSQL, MongoDB, and Redis side effects:

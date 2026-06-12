@@ -139,6 +139,8 @@ Docker-backed 数据库集成测试是可选测试，不包含在默认单元测
 go test -v -tags integration ./internal/integration -count=1 -timeout=20m
 ```
 
+官方 E2E demo 也提供一个名为 `E2E` 的手动 GitHub Actions workflow。它按需运行 Docker Compose demo，并上传 `.work` 产物和 summary JSON 供检查。
+
 ### 官方 E2E Demo
 
 运行可复现的 Docker Compose demo，使用真实 CLI 跑完整 `record -> replay -> diff -> report`，并覆盖 HTTP、MySQL、PostgreSQL、MongoDB 和 Redis side effects：
