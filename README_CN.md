@@ -43,6 +43,7 @@ shadiff/
 │   ├── diff.go                        # shadiff diff
 │   ├── report.go                      # shadiff report
 │   ├── session.go                     # shadiff session (list/show/delete)
+│   ├── doctor.go                      # shadiff doctor
 │   └── version.go                     # shadiff version
 ├── internal/
 │   ├── dbtype/                        # 支持的 DB 代理类型注册表
@@ -149,6 +150,18 @@ go test -v -tags integration ./internal/integration -count=1 -timeout=20m
 Demo 会把隔离产物写到 `examples/e2e/.work/<run-id>/`，包括 `diff.json` 和 `report.html`。端口、预期差异和排障说明见 `examples/e2e/README.md`。
 
 ## 使用方法
+
+### 环境诊断
+
+在运行集成测试、官方 E2E demo 或 release binary 验收前，可以先运行只读诊断：
+
+```bash
+shadiff doctor
+shadiff doctor --format json
+shadiff doctor --strict --e2e
+```
+
+`doctor` 会检查配置有效性、数据/日志目录可见性、支持的 DB proxy 类型、Docker / Docker Compose 可用性，以及可选的官方 E2E 端口占用情况。缺少可选工具会显示为 warning；error 会让命令失败，`--strict` 会让 warning 也失败。
 
 ### 1. 录制流量
 

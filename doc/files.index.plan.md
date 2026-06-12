@@ -71,6 +71,7 @@ Exclusions:
 | `cmd/replay.go` | `doc/src/cmd/replay.go.plan.md` | CLI Command | cmd |
 | `cmd/diff.go` | `doc/src/cmd/diff.go.plan.md` | CLI Command | cmd |
 | `cmd/report.go` | `doc/src/cmd/report.go.plan.md` | CLI Command | cmd |
+| `cmd/doctor.go` | `doc/src/cmd/doctor.go.plan.md` | CLI Command | cmd |
 
 ### internal/daemon/
 

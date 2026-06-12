@@ -99,6 +99,26 @@ shadiff replay -s "user-module-migration" -t http://localhost:9090 -c 5
 
 ---
 
+### `shadiff doctor`
+
+Run read-only environment diagnostics.
+
+```
+shadiff doctor
+shadiff doctor --format json
+shadiff doctor --strict --e2e
+```
+
+| Flag | Short | Default | Required | Description |
+|------|-------|---------|----------|-------------|
+| `--format` | | `terminal` | No | Output format: `terminal` or `json` |
+| `--strict` | | `false` | No | Treat warnings as command failures |
+| `--e2e` | | `false` | No | Include official E2E demo port availability checks |
+
+**Behavior**: Does not initialize or write config files. Resolves the requested config path, loads it read-only when present, validates it, reports storage/log directory visibility, reports supported DB proxy types, checks Docker and Docker Compose availability, and optionally checks that the official E2E demo ports can be bound. Check statuses are `pass`, `warn`, `error`, and `skip`. The command exits non-zero when any error check exists; with `--strict`, warning checks also produce a non-zero exit.
+
+---
+
 ### `shadiff diff`
 
 Compare behavioral differences between recorded and replayed traffic.
