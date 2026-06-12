@@ -43,6 +43,7 @@ shadiff/
 │   ├── diff.go                        # shadiff diff
 │   ├── report.go                      # shadiff report
 │   ├── session.go                     # shadiff session (list/show/delete)
+│   ├── doctor.go                      # shadiff doctor
 │   └── version.go                     # shadiff version
 ├── internal/
 │   ├── dbtype/                        # Supported DB proxy type registry
@@ -149,6 +150,18 @@ Run the reproducible Docker Compose demo to exercise the real CLI across `record
 The demo writes isolated artifacts under `examples/e2e/.work/<run-id>/`, including `diff.json` and `report.html`. See `examples/e2e/README.md` for ports, expected differences, and troubleshooting.
 
 ## Usage
+
+### Environment Diagnostics
+
+Run read-only diagnostics before integration tests, E2E demo runs, or release-binary acceptance:
+
+```bash
+shadiff doctor
+shadiff doctor --format json
+shadiff doctor --strict --e2e
+```
+
+`doctor` checks config validity, data/log directory visibility, supported DB proxy types, Docker / Docker Compose availability, and optional official E2E port availability. Missing optional tooling is reported as a warning; errors fail the command, and `--strict` also fails on warnings.
 
 ### 1. Record Traffic
 

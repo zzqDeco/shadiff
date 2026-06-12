@@ -48,6 +48,7 @@ This document maps every package, source file, and key implementation pattern in
 | `diff.go` | `shadiff diff` command; creates diff engine, runs comparison, and renders either terminal output or JSON output |
 | `report.go` | `shadiff report` command; loads saved diff results, creates reporter by format, writes output to file or stdout |
 | `session.go` | `shadiff session` parent command with `list`, `show`, `delete` subcommands; contains `getStore()` helper |
+| `doctor.go` | `shadiff doctor` read-only environment diagnostics with terminal and JSON output |
 
 ### `internal/daemon/` -- Daemon Process Management
 
