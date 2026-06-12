@@ -6,7 +6,7 @@
 |---|---|
 | Total source files (non-test `.go`) | 53 |
 | Test files (`*_test.go`) | 34 |
-| Project tooling files | 10 |
+| Project tooling files | 11 |
 | Project-level docs (`doc/*.md`) | 6 |
 | File-level docs (`doc/src/**/*.plan.md`) | 53 |
 | Project-level coverage | 100% |
@@ -41,7 +41,7 @@
 | Release Tooling | 1 | `scripts/verify-release-assets.sh` |
 | Demo Tooling | 3 | `examples/e2e/api/Dockerfile`, `examples/e2e/docker-compose.yml`, `examples/e2e/run.sh` |
 | Demo Data Initialization | 3 | `examples/e2e/init/mongo.js`, `examples/e2e/init/mysql.sql`, `examples/e2e/init/postgres.sql` |
-| GitHub Actions Workflows | 3 | `.github/workflows/ci.yml`, `.github/workflows/integration.yml`, `.github/workflows/release.yml` |
+| GitHub Actions Workflows | 4 | `.github/workflows/ci.yml`, `.github/workflows/integration.yml`, `.github/workflows/release.yml`, `.github/workflows/e2e.yml` |
 | Demo API | 1 | `examples/e2e/api/main.go` |
 | CLI Command / Helper | 12 | `cmd/root.go`, `cmd/version.go`, `cmd/session.go`, `cmd/runtime.go`, `cmd/dbproxy.go`, `cmd/doctor.go`, `cmd/record.go`, `cmd/record_stop.go`, `cmd/record_status.go`, `cmd/replay.go`, `cmd/diff.go`, `cmd/report.go` |
 | Data Model | 5 | `internal/model/session.go`, `internal/model/record.go`, `internal/model/request.go`, `internal/model/sideeffect.go`, `internal/model/diff.go` |
@@ -79,4 +79,5 @@ The following directories and file patterns are excluded from the documentation 
 | Side-effect architecture refactor inventory added | 2026-05-27 |
 | Doctor command inventory added | 2026-06-12 |
 | Reporter summary helper inventory added | 2026-06-12 |
+| Manual E2E workflow inventory added | 2026-06-12 |
 | Last updated | 2026-06-12 |

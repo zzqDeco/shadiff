@@ -55,6 +55,7 @@ Exclusions:
 | `.github/workflows/ci.yml` | - | GitHub Actions Workflow | ci |
 | `.github/workflows/integration.yml` | - | GitHub Actions Workflow | ci |
 | `.github/workflows/release.yml` | - | GitHub Actions Workflow | ci |
+| `.github/workflows/e2e.yml` | - | GitHub Actions Workflow | ci |
 
 ### cmd/
 
