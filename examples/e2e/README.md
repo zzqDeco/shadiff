@@ -38,6 +38,14 @@ To use an existing binary:
 
 ```bash
 SHADIFF_BIN=/path/to/shadiff ./examples/e2e/run.sh --assert
+./examples/e2e/run.sh --assert --binary /path/to/shadiff
+```
+
+To print or save an acceptance summary:
+
+```bash
+./examples/e2e/run.sh --assert --summary
+./examples/e2e/run.sh --assert --summary-file /tmp/shadiff-e2e-summary.json
 ```
 
 To keep containers running for troubleshooting:
@@ -67,6 +75,7 @@ Important artifacts:
 - `artifacts/diff.json`
 - `artifacts/report.html`
 - `artifacts/record-response.json`
+- `artifacts/summary.json` when `--summary` is used without `--summary-file`
 
 ## Expected Result
 
@@ -76,11 +85,14 @@ Important artifacts:
 - replay writes replay records
 - diff writes `diff.json`
 - report writes `report.html`
+- HTTP response differences are absent
 - `diff.json` contains at least one `db_query` difference
 - `diff.json` contains at least one `mongo_op` difference
 - `diff.json` contains at least one `redis_command` difference
 
 This means HTTP response behavior stayed stable while database side effects changed.
+
+When a summary is requested, the JSON includes the run/session identifiers, artifact paths, `totalCount`, `diffCount`, `httpMatch`, `hasSQLDiff`, `hasMongoDiff`, and `hasRedisDiff`.
 
 ## Ports
 

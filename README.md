@@ -145,9 +145,11 @@ Run the reproducible Docker Compose demo to exercise the real CLI across `record
 
 ```bash
 ./examples/e2e/run.sh --assert
+./examples/e2e/run.sh --assert --summary
+./examples/e2e/run.sh --assert --binary /path/to/shadiff --summary-file /tmp/shadiff-e2e-summary.json
 ```
 
-The demo writes isolated artifacts under `examples/e2e/.work/<run-id>/`, including `diff.json` and `report.html`. See `examples/e2e/README.md` for ports, expected differences, and troubleshooting.
+The demo writes isolated artifacts under `examples/e2e/.work/<run-id>/`, including `diff.json`, `report.html`, and optional summary JSON. See `examples/e2e/README.md` for ports, expected differences, release-binary validation, and troubleshooting.
 
 ## Usage
 

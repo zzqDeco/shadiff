@@ -12,18 +12,24 @@ SESSION_NAME="e2e-${RUN_ID}"
 
 ASSERT=0
 KEEP=0
+PRINT_SUMMARY=0
+SUMMARY_FILE=""
 RECORD_PID=""
 REPLAY_PID=""
+CURRENT_STAGE="init"
 
 usage() {
   cat <<'USAGE'
-Usage: examples/e2e/run.sh [--assert] [--keep]
+Usage: examples/e2e/run.sh [--assert] [--keep] [--binary <path>] [--summary] [--summary-file <path>]
 
 Runs the official Shadiff Docker Compose E2E demo.
 
 Options:
-  --assert  Verify that diff.json contains expected SQL, MongoDB, and Redis differences.
-  --keep    Keep Docker Compose services running after the script exits.
+  --assert               Verify expected HTTP, SQL, MongoDB, and Redis outcomes.
+  --keep                 Keep Docker Compose services running after the script exits.
+  --binary <path>        Use an existing Shadiff binary instead of building one.
+  --summary              Print a compact acceptance summary after the run.
+  --summary-file <path>  Write the acceptance summary as JSON.
 USAGE
 }
 
@@ -34,6 +40,25 @@ while [[ $# -gt 0 ]]; do
       ;;
     --keep)
       KEEP=1
+      ;;
+    --binary)
+      [[ $# -ge 2 ]] || {
+        echo "--binary requires a path" >&2
+        exit 2
+      }
+      SHADIFF_BIN="$2"
+      shift
+      ;;
+    --summary)
+      PRINT_SUMMARY=1
+      ;;
+    --summary-file)
+      [[ $# -ge 2 ]] || {
+        echo "--summary-file requires a path" >&2
+        exit 2
+      }
+      SUMMARY_FILE="$2"
+      shift
       ;;
     -h|--help)
       usage
@@ -52,9 +77,20 @@ log() {
   printf '[shadiff-e2e] %s\n' "$*"
 }
 
+stage() {
+  CURRENT_STAGE="$1"
+  log "$1"
+}
+
 fail() {
-  printf '[shadiff-e2e] error: %s\n' "$*" >&2
+  printf '[shadiff-e2e] error: stage "%s": %s\n' "${CURRENT_STAGE}" "$*" >&2
   exit 1
+}
+
+on_error() {
+  local status=$?
+  printf '[shadiff-e2e] error: stage "%s" failed with exit code %s\n' "${CURRENT_STAGE}" "${status}" >&2
+  exit "${status}"
 }
 
 choose_compose() {
@@ -91,6 +127,7 @@ cleanup() {
     log "keeping Docker Compose services for project ${PROJECT_NAME}"
   fi
 }
+trap on_error ERR
 trap cleanup EXIT
 
 wait_http() {
@@ -227,11 +264,90 @@ assert_demo() {
 
   grep -Eq '"totalCount": [1-9]' "${diff_json}" || fail "diff summary has no records"
   grep -Eq '"diffCount": [1-9]' "${diff_json}" || fail "diff summary has no expected differences"
+  if grep -Eq '"kind": "(status_code|header|body|body_field)"' "${diff_json}"; then
+    fail "diff.json contains HTTP response differences"
+  fi
   grep -q '"kind": "db_query"' "${diff_json}" || fail "diff.json does not contain a SQL side-effect difference"
   grep -q '"kind": "mongo_op"' "${diff_json}" || fail "diff.json does not contain a MongoDB side-effect difference"
   grep -q '"kind": "redis_command"' "${diff_json}" || fail "diff.json does not contain a Redis side-effect difference"
 }
 
+extract_json_number() {
+  local file="$1"
+  local key="$2"
+  sed -n "s/.*\"${key}\": \([0-9][0-9]*\).*/\1/p" "${file}" | head -n 1
+}
+
+json_bool_for_kind_absent() {
+  local file="$1"
+  local pattern="$2"
+  if grep -Eq "${pattern}" "${file}"; then
+    printf 'false'
+  else
+    printf 'true'
+  fi
+}
+
+json_bool_for_kind_present() {
+  local file="$1"
+  local kind="$2"
+  if grep -q "\"kind\": \"${kind}\"" "${file}"; then
+    printf 'true'
+  else
+    printf 'false'
+  fi
+}
+
+write_summary() {
+  local output_path="$1"
+  local diff_json="${WORK_DIR}/artifacts/diff.json"
+  local report_html="${WORK_DIR}/artifacts/report.html"
+  local records_file
+  local replay_file
+  local total_count
+  local diff_count
+  local http_match
+  local has_sql_diff
+  local has_mongo_diff
+  local has_redis_diff
+
+  records_file="$(find "${WORK_DIR}/data/sessions" -name records.jsonl -print -quit 2>/dev/null || true)"
+  replay_file="$(find "${WORK_DIR}/data/sessions" -name replay-records.jsonl -print -quit 2>/dev/null || true)"
+  total_count="$(extract_json_number "${diff_json}" "totalCount")"
+  diff_count="$(extract_json_number "${diff_json}" "diffCount")"
+  http_match="$(json_bool_for_kind_absent "${diff_json}" '"kind": "(status_code|header|body|body_field)"')"
+  has_sql_diff="$(json_bool_for_kind_present "${diff_json}" "db_query")"
+  has_mongo_diff="$(json_bool_for_kind_present "${diff_json}" "mongo_op")"
+  has_redis_diff="$(json_bool_for_kind_present "${diff_json}" "redis_command")"
+
+  cat >"${output_path}" <<EOF
+{
+  "runId": "${RUN_ID}",
+  "sessionName": "${SESSION_NAME}",
+  "workDir": "${WORK_DIR}",
+  "configFile": "${CONFIG_FILE}",
+  "artifactsDir": "${WORK_DIR}/artifacts",
+  "recordsFile": "${records_file}",
+  "replayRecordsFile": "${replay_file}",
+  "diffFile": "${diff_json}",
+  "reportFile": "${report_html}",
+  "totalCount": ${total_count:-0},
+  "diffCount": ${diff_count:-0},
+  "httpMatch": ${http_match},
+  "hasSQLDiff": ${has_sql_diff},
+  "hasMongoDiff": ${has_mongo_diff},
+  "hasRedisDiff": ${has_redis_diff}
+}
+EOF
+}
+
+print_summary() {
+  local summary_file="$1"
+  log "acceptance summary:"
+  sed -n '1,80p' "${summary_file}"
+}
+
+stage "preflight"
 require_command docker
 require_command curl
 choose_compose
@@ -239,14 +355,14 @@ write_config
 build_shadiff
 
 log "work directory: ${WORK_DIR}"
-log "starting Docker Compose services"
+stage "compose"
 "${COMPOSE[@]}" down -v --remove-orphans >/dev/null 2>&1 || true
 "${COMPOSE[@]}" up -d --build
 
 wait_http "http://127.0.0.1:18081/health" "old-api"
 wait_http "http://127.0.0.1:18082/health" "new-api"
 
-log "starting record stage"
+stage "record"
 "${SHADIFF_BIN}" --config "${CONFIG_FILE}" record \
   --target http://127.0.0.1:18081 \
   --listen 127.0.0.1:18080 \
@@ -266,7 +382,7 @@ kill -TERM "${RECORD_PID}" >/dev/null 2>&1 || true
 wait_process_exit "${RECORD_PID}" "record stage" 10
 RECORD_PID=""
 
-log "starting replay stage"
+stage "replay"
 "${SHADIFF_BIN}" --config "${CONFIG_FILE}" replay \
   --session "${SESSION_NAME}" \
   --target http://127.0.0.1:18082 \
@@ -277,11 +393,10 @@ log "starting replay stage"
   >"${WORK_DIR}/artifacts/replay.log" 2>&1 &
 REPLAY_PID=$!
 wait_log_marker "${WORK_DIR}/artifacts/replay.log" "Replay summary:" "${REPLAY_PID}" "replay stage" 60
-kill -TERM "${REPLAY_PID}" >/dev/null 2>&1 || true
 wait_process_exit "${REPLAY_PID}" "replay stage" 10
 REPLAY_PID=""
 
-log "starting diff stage"
+stage "diff"
 "${SHADIFF_BIN}" --config "${CONFIG_FILE}" diff \
   --session "${SESSION_NAME}" \
   --output json \
@@ -289,7 +404,7 @@ log "starting diff stage"
   --fail-on none \
   >"${WORK_DIR}/artifacts/diff.log" 2>&1
 
-log "generating HTML report"
+stage "report"
 "${SHADIFF_BIN}" --config "${CONFIG_FILE}" report \
   --session "${SESSION_NAME}" \
   --format html \
@@ -297,8 +412,19 @@ log "generating HTML report"
   >"${WORK_DIR}/artifacts/report.log" 2>&1
 
 if [[ "${ASSERT}" -eq 1 ]]; then
-  log "asserting expected E2E artifacts and differences"
+  stage "assert"
   assert_demo
+fi
+
+if [[ -n "${SUMMARY_FILE}" || "${PRINT_SUMMARY}" -eq 1 ]]; then
+  stage "summary"
+  summary_path="${SUMMARY_FILE:-${WORK_DIR}/artifacts/summary.json}"
+  mkdir -p "$(dirname "${summary_path}")"
+  write_summary "${summary_path}"
+  log "summary: ${summary_path}"
+  if [[ "${PRINT_SUMMARY}" -eq 1 ]]; then
+    print_summary "${summary_path}"
+  fi
 fi
 
 log "demo complete"

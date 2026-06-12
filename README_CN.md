@@ -145,9 +145,11 @@ go test -v -tags integration ./internal/integration -count=1 -timeout=20m
 
 ```bash
 ./examples/e2e/run.sh --assert
+./examples/e2e/run.sh --assert --summary
+./examples/e2e/run.sh --assert --binary /path/to/shadiff --summary-file /tmp/shadiff-e2e-summary.json
 ```
 
-Demo 会把隔离产物写到 `examples/e2e/.work/<run-id>/`，包括 `diff.json` 和 `report.html`。端口、预期差异和排障说明见 `examples/e2e/README.md`。
+Demo 会把隔离产物写到 `examples/e2e/.work/<run-id>/`，包括 `diff.json`、`report.html` 和可选 summary JSON。端口、预期差异、release binary 验收方式和排障说明见 `examples/e2e/README.md`。
 
 ## 使用方法
 
