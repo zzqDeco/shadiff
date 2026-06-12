@@ -9,7 +9,7 @@
 
 ## 2. Core Responsibility
 - Implements the `Reporter` interface for terminal (CLI) output with ANSI color codes.
-- Renders a human-readable diff report including per-request match/diff status, difference details with severity coloring, and an aggregate summary section.
+- Renders a human-readable diff report including per-request match/diff status, difference details with severity coloring, an aggregate summary section, and a grouped difference summary.
 - Changes to this file should be kept in sync with project-level documentation.
 
 ## 3. Inputs & Outputs
@@ -30,7 +30,7 @@
   - Ignored differences are printed in gray with the matched rule name.
   - Non-ignored differences show expected vs. actual values and a severity badge colored by level: red for error, yellow for warning, cyan for info.
   - If the request path is empty, it defaults to `"/"`.
-  - The summary section shows total/matched/diff counts, optional ignored and critical counts, and the match rate as a bold percentage.
+  - The summary section shows total/matched/diff counts, grouped HTTP/SQL/MongoDB/Redis/unknown side-effect counts, optional ignored and critical counts, and the match rate as a bold percentage.
   - Regression coverage includes SQL, MongoDB, and Redis side-effect difference paths and values.
 
 ## 5. Dependencies

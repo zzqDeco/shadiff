@@ -793,6 +793,89 @@ func TestRunSessionListShowDelete(t *testing.T) {
 	}
 }
 
+func TestRunSessionInspect_PrintsArtifactAndSideEffectCounts(t *testing.T) {
+	withRuntimeConfig(t, nil)
+	store := newStoreForRuntime(t)
+	session := &model.Session{Name: "inspect-case", Status: model.SessionReplayed}
+	if err := store.Create(session); err != nil {
+		t.Fatalf("Create() error: %v", err)
+	}
+	if err := store.AppendRecord(session.ID, &model.Record{
+		ID:        "record-1",
+		SessionID: session.ID,
+		Sequence:  1,
+		SideEffects: []model.SideEffect{
+			model.NewSQLSideEffect("mysql", "SELECT 1", 0),
+			model.NewMongoSideEffect(model.MongoSideEffect{Database: "app", Collection: "users", Operation: "find"}, 0),
+		},
+	}); err != nil {
+		t.Fatalf("AppendRecord() error: %v", err)
+	}
+	if err := store.AppendReplayRecord(session.ID, &model.Record{
+		ID:        "replay-1",
+		SessionID: session.ID,
+		Sequence:  1,
+		SideEffects: []model.SideEffect{
+			model.NewRedisSideEffect("GET", "user:1", []string{"user:1"}, 0),
+		},
+	}); err != nil {
+		t.Fatalf("AppendReplayRecord() error: %v", err)
+	}
+	if err := store.SaveResults(session.ID, []model.DiffResult{{RecordID: "record-1", Sequence: 1}}); err != nil {
+		t.Fatalf("SaveResults() error: %v", err)
+	}
+
+	sessionInspectFormat = "terminal"
+	output := captureStdout(t, func() {
+		if err := runSessionInspect(&cobra.Command{}, []string{session.ID}); err != nil {
+			t.Fatalf("runSessionInspect() error: %v", err)
+		}
+	})
+	for _, want := range []string{
+		"Records: 1",
+		"Replay records: 1",
+		"Diff results: 1",
+		"mysql: 1",
+		"mongo: 1",
+		"redis: 1",
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("inspect output missing %q:\n%s", want, output)
+		}
+	}
+}
+
+func TestRunSessionInspect_JSONWarningsForMissingReplayAndDiff(t *testing.T) {
+	withRuntimeConfig(t, nil)
+	store := newStoreForRuntime(t)
+	session := &model.Session{Name: "inspect-missing", Status: model.SessionCompleted}
+	if err := store.Create(session); err != nil {
+		t.Fatalf("Create() error: %v", err)
+	}
+	if err := store.AppendRecord(session.ID, &model.Record{ID: "record-1", SessionID: session.ID}); err != nil {
+		t.Fatalf("AppendRecord() error: %v", err)
+	}
+
+	sessionInspectFormat = "json"
+	var out strings.Builder
+	cmd := &cobra.Command{}
+	cmd.SetOut(&out)
+	if err := runSessionInspect(cmd, []string{session.Name}); err != nil {
+		t.Fatalf("runSessionInspect() error: %v", err)
+	}
+
+	var report sessionInspectReport
+	if err := json.Unmarshal([]byte(out.String()), &report); err != nil {
+		t.Fatalf("Unmarshal() error = %v\noutput=%s", err, out.String())
+	}
+	if report.RecordCount != 1 || report.ReplayRecordCount != 0 || report.DiffResultCount != 0 {
+		t.Fatalf("unexpected counts: %+v", report)
+	}
+	if len(report.Warnings) != 2 {
+		t.Fatalf("warnings = %v, want replay and diff warnings", report.Warnings)
+	}
+}
+
 func TestRunRecordStatus_NoActiveSessions(t *testing.T) {
 	withRuntimeConfig(t, nil)
 

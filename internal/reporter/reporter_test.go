@@ -254,6 +254,10 @@ func TestJSONReporter_Generate_SideEffectDifferences(t *testing.T) {
 
 	output := buf.String()
 	for _, want := range []string{
+		`"differenceSummary"`,
+		`"sql": 1`,
+		`"mongoDb": 1`,
+		`"redis": 1`,
 		`"kind": "db_query"`,
 		`"kind": "mongo_op"`,
 		`"kind": "redis_command"`,
@@ -337,6 +341,10 @@ func TestHTMLReporter_Generate_SideEffectDifferences(t *testing.T) {
 
 	output := buf.String()
 	for _, want := range []string{
+		"SQL",
+		"MongoDB",
+		"Redis",
+		"Unknown Side Effects",
 		"sideEffects.db[0].query",
 		"SELECT * FROM users WHERE id = 1",
 		"sideEffects.mongo[0].collection",
@@ -458,6 +466,7 @@ func TestTerminalReporter_Generate_SideEffectDifferences(t *testing.T) {
 
 	output := buf.String()
 	for _, want := range []string{
+		"Difference summary: HTTP=0 SQL=1 MongoDB=1 Redis=1 UnknownSideEffect=0",
 		"sideEffects.db[0].query",
 		"SELECT * FROM users WHERE id = 1",
 		"sideEffects.mongo[0].collection",
@@ -468,5 +477,26 @@ func TestTerminalReporter_Generate_SideEffectDifferences(t *testing.T) {
 		if !strings.Contains(output, want) {
 			t.Fatalf("terminal output missing %q:\n%s", want, output)
 		}
+	}
+}
+
+func TestSummarizeDifferences_GroupsReportCategories(t *testing.T) {
+	results := []model.DiffResult{{
+		Differences: []model.Difference{
+			{Kind: model.DiffStatusCode},
+			{Kind: model.DiffBodyField},
+			{Kind: model.DiffDBQuery},
+			{Kind: model.DiffDBQueryCount, Path: "sideEffects.db"},
+			{Kind: model.DiffMongoOp},
+			{Kind: model.DiffRedisCommand},
+			{Kind: model.DiffRedisCount},
+			{Kind: model.DiffDBQueryCount, Path: "sideEffects"},
+			{Kind: model.DiffHeader, Ignored: true},
+		},
+	}}
+
+	summary := SummarizeDifferences(results)
+	if summary.HTTP != 2 || summary.SQL != 2 || summary.MongoDB != 1 || summary.Redis != 2 || summary.UnknownSideEffect != 1 || summary.Ignored != 1 {
+		t.Fatalf("SummarizeDifferences() = %+v", summary)
 	}
 }

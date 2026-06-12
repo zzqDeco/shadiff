@@ -264,13 +264,19 @@ shadiff report -s "migration-v1" -f html -o report.html
 shadiff report -s "migration-v1" -f json -o report.json
 ```
 
+终端、JSON 和 HTML 报告都会按 HTTP、SQL、MongoDB、Redis 以及 unknown side-effect 分类展示差异摘要。
+
 ### 5. 管理会话
 
 ```bash
 shadiff session list
 shadiff session show <session-id>
+shadiff session inspect <session-id>
+shadiff session inspect <session-id> --format json
 shadiff session delete <session-id>
 ```
+
+`session inspect` 会展示 record/replay/diff 产物状态、计数、存储路径，以及按类型统计的数据库 side-effect 数量。
 
 ## 配置说明
 

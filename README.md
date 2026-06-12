@@ -264,13 +264,19 @@ shadiff report -s "migration-v1" -f html -o report.html
 shadiff report -s "migration-v1" -f json -o report.json
 ```
 
+Terminal, JSON, and HTML reports include a difference summary grouped by HTTP, SQL, MongoDB, Redis, and unknown side-effect categories.
+
 ### 5. Manage Sessions
 
 ```bash
 shadiff session list
 shadiff session show <session-id>
+shadiff session inspect <session-id>
+shadiff session inspect <session-id> --format json
 shadiff session delete <session-id>
 ```
+
+`session inspect` shows record/replay/diff artifact status, counts, storage paths, and database side-effect counts by type.
 
 ## Configuration
 
