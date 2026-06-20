@@ -9,7 +9,7 @@
 
 ## 2. Core Responsibility
 - Implements the `Reporter` interface for HTML output.
-- Renders a self-contained HTML page with styled diff results and summary statistics using Go's `html/template` package.
+- Renders a self-contained HTML page with styled diff results, summary statistics, and grouped difference counts using Go's `html/template` package.
 - Changes to this file should be kept in sync with project-level documentation.
 
 ## 3. Inputs & Outputs
@@ -30,6 +30,7 @@
     - `severityClass(s model.Severity) string` -- maps severity levels to CSS class names (`"error"`, `"warning"`, `"info"`).
     - `pct(f float64) string` -- converts a 0-1 float to a percentage string (e.g., `0.95` becomes `"95.0"`).
   - The generated page is fully self-contained with inline `<style>` block; no external CSS or JavaScript dependencies.
+  - A grouped difference summary shows HTTP, SQL, MongoDB, Redis, unknown side-effect, and ignored counts when any are present.
   - Records with differences get a red left border (`has-diff` class); matching records get a green left border.
   - Ignored differences are rendered with a line-through style and gray text.
   - Severity badges are color-coded: red background for error, amber for warning, blue for info.

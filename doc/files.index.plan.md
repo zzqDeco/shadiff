@@ -55,6 +55,7 @@ Exclusions:
 | `.github/workflows/ci.yml` | - | GitHub Actions Workflow | ci |
 | `.github/workflows/integration.yml` | - | GitHub Actions Workflow | ci |
 | `.github/workflows/release.yml` | - | GitHub Actions Workflow | ci |
+| `.github/workflows/e2e.yml` | - | GitHub Actions Workflow | ci |
 
 ### cmd/
 
@@ -71,6 +72,7 @@ Exclusions:
 | `cmd/replay.go` | `doc/src/cmd/replay.go.plan.md` | CLI Command | cmd |
 | `cmd/diff.go` | `doc/src/cmd/diff.go.plan.md` | CLI Command | cmd |
 | `cmd/report.go` | `doc/src/cmd/report.go.plan.md` | CLI Command | cmd |
+| `cmd/doctor.go` | `doc/src/cmd/doctor.go.plan.md` | CLI Command | cmd |
 
 ### internal/daemon/
 
@@ -158,6 +160,7 @@ Exclusions:
 | `internal/reporter/terminal.go` | `doc/src/internal/reporter/terminal.go.plan.md` | Reporter Implementation | reporter |
 | `internal/reporter/json.go` | `doc/src/internal/reporter/json.go.plan.md` | Reporter Implementation | reporter |
 | `internal/reporter/html.go` | `doc/src/internal/reporter/html.go.plan.md` | Reporter Implementation | reporter |
+| `internal/reporter/summary.go` | `doc/src/internal/reporter/summary.go.plan.md` | Reporter Helper | reporter |
 
 ### internal/logger/
 

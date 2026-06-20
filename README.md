@@ -43,6 +43,7 @@ shadiff/
 │   ├── diff.go                        # shadiff diff
 │   ├── report.go                      # shadiff report
 │   ├── session.go                     # shadiff session (list/show/delete)
+│   ├── doctor.go                      # shadiff doctor
 │   └── version.go                     # shadiff version
 ├── internal/
 │   ├── dbtype/                        # Supported DB proxy type registry
@@ -138,17 +139,33 @@ Docker-backed database integration tests are opt-in and are not part of the defa
 go test -v -tags integration ./internal/integration -count=1 -timeout=20m
 ```
 
+The official E2E demo also has a manual GitHub Actions workflow named `E2E`. It runs the Docker Compose demo on demand and uploads the `.work` artifacts plus summary JSON for inspection.
+
 ### Official E2E Demo
 
 Run the reproducible Docker Compose demo to exercise the real CLI across `record -> replay -> diff -> report` with HTTP, MySQL, PostgreSQL, MongoDB, and Redis side effects:
 
 ```bash
 ./examples/e2e/run.sh --assert
+./examples/e2e/run.sh --assert --summary
+./examples/e2e/run.sh --assert --binary /path/to/shadiff --summary-file /tmp/shadiff-e2e-summary.json
 ```
 
-The demo writes isolated artifacts under `examples/e2e/.work/<run-id>/`, including `diff.json` and `report.html`. See `examples/e2e/README.md` for ports, expected differences, and troubleshooting.
+The demo writes isolated artifacts under `examples/e2e/.work/<run-id>/`, including `diff.json`, `report.html`, and optional summary JSON. See `examples/e2e/README.md` for ports, expected differences, release-binary validation, and troubleshooting.
 
 ## Usage
+
+### Environment Diagnostics
+
+Run read-only diagnostics before integration tests, E2E demo runs, or release-binary acceptance:
+
+```bash
+shadiff doctor
+shadiff doctor --format json
+shadiff doctor --strict --e2e
+```
+
+`doctor` checks config validity, data/log directory visibility, supported DB proxy types, Docker / Docker Compose availability, and optional official E2E port availability. Missing optional tooling is reported as a warning; errors fail the command, and `--strict` also fails on warnings.
 
 ### 1. Record Traffic
 
@@ -249,13 +266,19 @@ shadiff report -s "migration-v1" -f html -o report.html
 shadiff report -s "migration-v1" -f json -o report.json
 ```
 
+Terminal, JSON, and HTML reports include a difference summary grouped by HTTP, SQL, MongoDB, Redis, and unknown side-effect categories.
+
 ### 5. Manage Sessions
 
 ```bash
 shadiff session list
 shadiff session show <session-id>
+shadiff session inspect <session-id>
+shadiff session inspect <session-id> --format json
 shadiff session delete <session-id>
 ```
+
+`session inspect` shows record/replay/diff artifact status, counts, storage paths, and database side-effect counts by type.
 
 ## Configuration
 

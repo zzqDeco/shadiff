@@ -27,6 +27,9 @@ Workflow:
   3. shadiff diff    — Perform semantic-level comparison of behavioral differences
   4. shadiff report  — Generate a detailed diff report`,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		if isDoctorCommand(cmd) {
+			return nil
+		}
 		return initRuntime()
 	},
 }
@@ -46,4 +49,13 @@ func init() {
 
 	// Set version info
 	rootCmd.Version = fmt.Sprintf("%s (commit: %s, built: %s)", Version, Commit, BuildDate)
+}
+
+func isDoctorCommand(cmd *cobra.Command) bool {
+	for c := cmd; c != nil; c = c.Parent() {
+		if c.Name() == "doctor" {
+			return true
+		}
+	}
+	return false
 }

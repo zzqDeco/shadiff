@@ -17,22 +17,22 @@
   - `results []model.DiffResult` -- the list of per-request comparison results.
   - `summary model.DiffSummary` -- aggregate statistics.
   - `w io.Writer` -- the destination for JSON output.
-- Output results: A JSON document written to `w` with two top-level keys: `"summary"` and `"results"`. Returns an error if JSON encoding fails.
+- Output results: A JSON document written to `w` with top-level keys: `"summary"`, `"differenceSummary"`, and `"results"`. Returns an error if JSON encoding fails.
 
 ## 4. Key Implementation Details
 - Structs/interfaces:
   - `JSONReporter` (struct, empty) -- implements `Reporter`.
-  - `jsonReport` (unexported struct) -- wrapper that holds `Summary` and `Results` fields for JSON serialization. Uses json struct tags `"summary"` and `"results"`.
+  - `jsonReport` (unexported struct) -- wrapper that holds `Summary`, `DifferenceSummary`, and `Results` fields for JSON serialization.
 - Exported functions/methods:
   - `(*JSONReporter) Generate(results []model.DiffResult, summary model.DiffSummary, w io.Writer) error` -- encodes the report as indented JSON.
 - Key behaviors:
   - Uses `json.NewEncoder` with `SetIndent("", "  ")` for human-readable output (2-space indentation).
-  - The JSON structure places `summary` before `results` in the output, matching the struct field order.
+  - The JSON structure places `summary`, `differenceSummary`, and `results` in that order, matching the struct field order.
   - Encoding errors (e.g., from unencodable values in `any`-typed fields like `Expected`/`Actual`) are propagated to the caller.
   - Regression coverage includes SQL, MongoDB, and Redis side-effect difference kinds in JSON report output.
 
 ## 5. Dependencies
-- Internal: `shadiff/internal/model` (for `model.DiffResult`, `model.DiffSummary`).
+- Internal: `shadiff/internal/model` (for `model.DiffResult`, `model.DiffSummary`) and `SummarizeDifferences()` from the same reporter package.
 - External:
   - `encoding/json` (JSON encoding)
   - `io` (`io.Writer` interface)

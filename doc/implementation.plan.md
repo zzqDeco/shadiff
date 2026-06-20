@@ -48,6 +48,7 @@ This document maps every package, source file, and key implementation pattern in
 | `diff.go` | `shadiff diff` command; creates diff engine, runs comparison, and renders either terminal output or JSON output |
 | `report.go` | `shadiff report` command; loads saved diff results, creates reporter by format, writes output to file or stdout |
 | `session.go` | `shadiff session` parent command with `list`, `show`, `delete` subcommands; contains `getStore()` helper |
+| `doctor.go` | `shadiff doctor` read-only environment diagnostics with terminal and JSON output |
 
 ### `internal/daemon/` -- Daemon Process Management
 
@@ -144,8 +145,9 @@ This document maps every package, source file, and key implementation pattern in
 |------|-------------|
 | `reporter.go` | `Reporter` interface; `NewReporter(format)` factory function dispatching to terminal/json/html |
 | `terminal.go` | `TerminalReporter`; ANSI-colored output with unicode tree connectors; color-coded severity levels |
-| `json.go` | `JSONReporter`; outputs `{ "summary": ..., "results": [...] }` with indentation |
+| `json.go` | `JSONReporter`; outputs `{ "summary": ..., "differenceSummary": ..., "results": [...] }` with indentation |
 | `html.go` | `HTMLReporter`; self-contained HTML page with embedded CSS via Go `html/template`; responsive card layout with color-coded match/diff status |
+| `summary.go` | Difference summary helper grouping report differences by HTTP, SQL, MongoDB, Redis, and unknown side-effect categories |
 | `reporter_test.go` | Tests for reporter implementations, including SQL/MongoDB/Redis side-effect difference output |
 
 ### `internal/storage/` -- Persistence

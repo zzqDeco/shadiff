@@ -43,6 +43,7 @@ shadiff/
 │   ├── diff.go                        # shadiff diff
 │   ├── report.go                      # shadiff report
 │   ├── session.go                     # shadiff session (list/show/delete)
+│   ├── doctor.go                      # shadiff doctor
 │   └── version.go                     # shadiff version
 ├── internal/
 │   ├── dbtype/                        # 支持的 DB 代理类型注册表
@@ -138,17 +139,33 @@ Docker-backed 数据库集成测试是可选测试，不包含在默认单元测
 go test -v -tags integration ./internal/integration -count=1 -timeout=20m
 ```
 
+官方 E2E demo 也提供一个名为 `E2E` 的手动 GitHub Actions workflow。它按需运行 Docker Compose demo，并上传 `.work` 产物和 summary JSON 供检查。
+
 ### 官方 E2E Demo
 
 运行可复现的 Docker Compose demo，使用真实 CLI 跑完整 `record -> replay -> diff -> report`，并覆盖 HTTP、MySQL、PostgreSQL、MongoDB 和 Redis side effects：
 
 ```bash
 ./examples/e2e/run.sh --assert
+./examples/e2e/run.sh --assert --summary
+./examples/e2e/run.sh --assert --binary /path/to/shadiff --summary-file /tmp/shadiff-e2e-summary.json
 ```
 
-Demo 会把隔离产物写到 `examples/e2e/.work/<run-id>/`，包括 `diff.json` 和 `report.html`。端口、预期差异和排障说明见 `examples/e2e/README.md`。
+Demo 会把隔离产物写到 `examples/e2e/.work/<run-id>/`，包括 `diff.json`、`report.html` 和可选 summary JSON。端口、预期差异、release binary 验收方式和排障说明见 `examples/e2e/README.md`。
 
 ## 使用方法
+
+### 环境诊断
+
+在运行集成测试、官方 E2E demo 或 release binary 验收前，可以先运行只读诊断：
+
+```bash
+shadiff doctor
+shadiff doctor --format json
+shadiff doctor --strict --e2e
+```
+
+`doctor` 会检查配置有效性、数据/日志目录可见性、支持的 DB proxy 类型、Docker / Docker Compose 可用性，以及可选的官方 E2E 端口占用情况。缺少可选工具会显示为 warning；error 会让命令失败，`--strict` 会让 warning 也失败。
 
 ### 1. 录制流量
 
@@ -249,13 +266,19 @@ shadiff report -s "migration-v1" -f html -o report.html
 shadiff report -s "migration-v1" -f json -o report.json
 ```
 
+终端、JSON 和 HTML 报告都会按 HTTP、SQL、MongoDB、Redis 以及 unknown side-effect 分类展示差异摘要。
+
 ### 5. 管理会话
 
 ```bash
 shadiff session list
 shadiff session show <session-id>
+shadiff session inspect <session-id>
+shadiff session inspect <session-id> --format json
 shadiff session delete <session-id>
 ```
+
+`session inspect` 会展示 record/replay/diff 产物状态、计数、存储路径，以及按类型统计的数据库 side-effect 数量。
 
 ## 配置说明
 

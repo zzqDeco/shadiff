@@ -13,11 +13,13 @@ type HTMLReporter struct{}
 
 func (r *HTMLReporter) Generate(results []model.DiffResult, summary model.DiffSummary, w io.Writer) error {
 	data := struct {
-		Summary model.DiffSummary
-		Results []model.DiffResult
+		Summary           model.DiffSummary
+		DifferenceSummary DifferenceSummary
+		Results           []model.DiffResult
 	}{
-		Summary: summary,
-		Results: results,
+		Summary:           summary,
+		DifferenceSummary: SummarizeDifferences(results),
+		Results:           results,
 	}
 
 	tmpl, err := template.New("report").Funcs(template.FuncMap{
@@ -54,6 +56,10 @@ const htmlTemplate = `<!DOCTYPE html>
   .summary .stat { display: inline-block; margin-right: 30px; }
   .summary .stat .value { font-size: 24px; font-weight: bold; }
   .summary .stat .label { color: #666; font-size: 14px; }
+  .diff-summary { background: white; padding: 16px 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+  .diff-summary .stat { display: inline-block; margin-right: 24px; }
+  .diff-summary .value { font-size: 20px; font-weight: bold; }
+  .diff-summary .label { color: #666; font-size: 13px; }
   .match-rate { color: #22c55e; }
   .record { background: white; padding: 16px; margin-bottom: 8px; border-radius: 6px; border-left: 4px solid #22c55e; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
   .record.has-diff { border-left-color: #ef4444; }
@@ -93,6 +99,17 @@ const htmlTemplate = `<!DOCTYPE html>
     <div class="label">Match Rate</div>
   </div>
 </div>
+
+{{if or .DifferenceSummary.HTTP .DifferenceSummary.SQL .DifferenceSummary.MongoDB .DifferenceSummary.Redis .DifferenceSummary.UnknownSideEffect .DifferenceSummary.Ignored}}
+<div class="diff-summary">
+  <div class="stat"><span class="value">{{.DifferenceSummary.HTTP}}</span><div class="label">HTTP</div></div>
+  <div class="stat"><span class="value">{{.DifferenceSummary.SQL}}</span><div class="label">SQL</div></div>
+  <div class="stat"><span class="value">{{.DifferenceSummary.MongoDB}}</span><div class="label">MongoDB</div></div>
+  <div class="stat"><span class="value">{{.DifferenceSummary.Redis}}</span><div class="label">Redis</div></div>
+  <div class="stat"><span class="value">{{.DifferenceSummary.UnknownSideEffect}}</span><div class="label">Unknown Side Effects</div></div>
+  <div class="stat"><span class="value">{{.DifferenceSummary.Ignored}}</span><div class="label">Ignored</div></div>
+</div>
+{{end}}
 
 {{range .Results}}
 <div class="record {{if not .Match}}has-diff{{end}}">

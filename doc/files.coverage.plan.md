@@ -4,11 +4,11 @@
 
 | Metric | Count |
 |---|---|
-| Total source files (non-test `.go`) | 51 |
-| Test files (`*_test.go`) | 33 |
-| Project tooling files | 10 |
+| Total source files (non-test `.go`) | 53 |
+| Test files (`*_test.go`) | 34 |
+| Project tooling files | 11 |
 | Project-level docs (`doc/*.md`) | 6 |
-| File-level docs (`doc/src/**/*.plan.md`) | 51 |
+| File-level docs (`doc/src/**/*.plan.md`) | 53 |
 | Project-level coverage | 100% |
 | File-level coverage | 100% |
 
@@ -17,7 +17,7 @@
 | Module | Package Path | Source Files | Test Files | File-Level Docs | Coverage |
 |---|---|---|---|---|---|
 | root | `.` | 1 | 0 | 1 | 100% |
-| cmd | `cmd/` | 11 | 5 | 11 | 100% |
+| cmd | `cmd/` | 12 | 6 | 12 | 100% |
 | daemon | `internal/daemon/` | 3 | 1 | 3 | 100% |
 | model | `internal/model/` | 5 | 1 | 5 | 100% |
 | config | `internal/config/` | 3 | 2 | 3 | 100% |
@@ -27,11 +27,11 @@
 | storage | `internal/storage/` | 2 | 1 | 2 | 100% |
 | replay | `internal/replay/` | 3 | 3 | 3 | 100% |
 | diff | `internal/diff/` | 8 | 8 | 8 | 100% |
-| reporter | `internal/reporter/` | 4 | 1 | 4 | 100% |
+| reporter | `internal/reporter/` | 5 | 1 | 5 | 100% |
 | logger | `internal/logger/` | 1 | 2 | 1 | 100% |
 | integration | `internal/integration/` | 0 | 1 | 0 | n/a |
 | examples | `examples/e2e/api/` | 1 | 0 | 1 | 100% |
-| **Total** | | **51** | **33** | **51** | **100%** |
+| **Total** | | **53** | **34** | **53** | **100%** |
 
 ## File Types Breakdown
 
@@ -41,17 +41,17 @@
 | Release Tooling | 1 | `scripts/verify-release-assets.sh` |
 | Demo Tooling | 3 | `examples/e2e/api/Dockerfile`, `examples/e2e/docker-compose.yml`, `examples/e2e/run.sh` |
 | Demo Data Initialization | 3 | `examples/e2e/init/mongo.js`, `examples/e2e/init/mysql.sql`, `examples/e2e/init/postgres.sql` |
-| GitHub Actions Workflows | 3 | `.github/workflows/ci.yml`, `.github/workflows/integration.yml`, `.github/workflows/release.yml` |
+| GitHub Actions Workflows | 4 | `.github/workflows/ci.yml`, `.github/workflows/integration.yml`, `.github/workflows/release.yml`, `.github/workflows/e2e.yml` |
 | Demo API | 1 | `examples/e2e/api/main.go` |
-| CLI Command / Helper | 11 | `cmd/root.go`, `cmd/version.go`, `cmd/session.go`, `cmd/runtime.go`, `cmd/dbproxy.go`, `cmd/record.go`, `cmd/record_stop.go`, `cmd/record_status.go`, `cmd/replay.go`, `cmd/diff.go`, `cmd/report.go` |
+| CLI Command / Helper | 12 | `cmd/root.go`, `cmd/version.go`, `cmd/session.go`, `cmd/runtime.go`, `cmd/dbproxy.go`, `cmd/doctor.go`, `cmd/record.go`, `cmd/record_stop.go`, `cmd/record_status.go`, `cmd/replay.go`, `cmd/diff.go`, `cmd/report.go` |
 | Data Model | 5 | `internal/model/session.go`, `internal/model/record.go`, `internal/model/request.go`, `internal/model/sideeffect.go`, `internal/model/diff.go` |
 | Database Type Registry | 1 | `internal/dbtype/dbtype.go` |
 | Configuration | 3 | `internal/config/config.go`, `internal/config/store.go`, `internal/config/validate.go` |
 | Interface Definition | 3 | `internal/capture/dbhook/hook.go`, `internal/storage/store.go`, `internal/reporter/reporter.go` |
 | Daemon Management | 3 | `internal/daemon/pidfile.go`, `internal/daemon/process_unix.go`, `internal/daemon/process_windows.go` |
-| Capture / Diff / Replay / Storage Implementation | 22 | `internal/capture/proxy.go`, `internal/capture/recorder.go`, `internal/capture/dbhook/tcp_proxy.go`, `internal/capture/dbhook/mysql.go`, `internal/capture/dbhook/postgres.go`, `internal/capture/dbhook/mongo.go`, `internal/capture/dbhook/redis.go`, `internal/storage/filestore.go`, `internal/replay/engine.go`, `internal/replay/worker.go`, `internal/replay/transform.go`, `internal/diff/engine.go`, `internal/diff/sideeffects.go`, `internal/diff/json.go`, `internal/diff/db.go`, `internal/diff/mongo.go`, `internal/diff/redis.go`, `internal/diff/rules.go`, `internal/diff/rule_loader.go`, `internal/reporter/terminal.go`, `internal/reporter/json.go`, `internal/reporter/html.go` |
+| Capture / Diff / Replay / Storage / Report Implementation | 23 | `internal/capture/proxy.go`, `internal/capture/recorder.go`, `internal/capture/dbhook/tcp_proxy.go`, `internal/capture/dbhook/mysql.go`, `internal/capture/dbhook/postgres.go`, `internal/capture/dbhook/mongo.go`, `internal/capture/dbhook/redis.go`, `internal/storage/filestore.go`, `internal/replay/engine.go`, `internal/replay/worker.go`, `internal/replay/transform.go`, `internal/diff/engine.go`, `internal/diff/sideeffects.go`, `internal/diff/json.go`, `internal/diff/db.go`, `internal/diff/mongo.go`, `internal/diff/redis.go`, `internal/diff/rules.go`, `internal/diff/rule_loader.go`, `internal/reporter/terminal.go`, `internal/reporter/json.go`, `internal/reporter/html.go`, `internal/reporter/summary.go` |
 | Logger | 1 | `internal/logger/logger.go` |
-| **Total** | **51** | |
+| **Total** | **53** | |
 
 ## Excluded Directories
 
@@ -77,4 +77,7 @@ The following directories and file patterns are excluded from the documentation 
 | Official E2E demo inventory added | 2026-05-26 |
 | Redis side-effect support inventory added | 2026-05-27 |
 | Side-effect architecture refactor inventory added | 2026-05-27 |
-| Last updated | 2026-05-27 |
+| Doctor command inventory added | 2026-06-12 |
+| Reporter summary helper inventory added | 2026-06-12 |
+| Manual E2E workflow inventory added | 2026-06-12 |
+| Last updated | 2026-06-12 |

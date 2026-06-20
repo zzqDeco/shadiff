@@ -99,6 +99,26 @@ shadiff replay -s "user-module-migration" -t http://localhost:9090 -c 5
 
 ---
 
+### `shadiff doctor`
+
+Run read-only environment diagnostics.
+
+```
+shadiff doctor
+shadiff doctor --format json
+shadiff doctor --strict --e2e
+```
+
+| Flag | Short | Default | Required | Description |
+|------|-------|---------|----------|-------------|
+| `--format` | | `terminal` | No | Output format: `terminal` or `json` |
+| `--strict` | | `false` | No | Treat warnings as command failures |
+| `--e2e` | | `false` | No | Include official E2E demo port availability checks |
+
+**Behavior**: Does not initialize or write config files. Resolves the requested config path, loads it read-only when present, validates it, reports storage/log directory visibility, reports supported DB proxy types, checks Docker and Docker Compose availability, and optionally checks that the official E2E demo ports can be bound. Check statuses are `pass`, `warn`, `error`, and `skip`. The command exits non-zero when any error check exists; with `--strict`, warning checks also produce a non-zero exit.
+
+---
+
 ### `shadiff diff`
 
 Compare behavioral differences between recorded and replayed traffic.
@@ -139,13 +159,13 @@ shadiff report -s abc123 -f json -o result.json
 | `--format` | `-f` | `terminal` | No | Report format: `terminal`, `json`, `html` |
 | `--output` | `-o` | stdout | No | Output file path |
 
-**Behavior**: Loads saved diff results, computes summary statistics, and delegates to the appropriate `Reporter` implementation. When `--output` is set, writes to a file; otherwise writes to stdout.
+**Behavior**: Loads saved diff results, computes summary statistics, and delegates to the appropriate `Reporter` implementation. Terminal and HTML reports show a difference summary grouped by HTTP, SQL, MongoDB, Redis, and unknown side-effect categories. JSON reports include the same data in `differenceSummary` while preserving `summary` and `results`. When `--output` is set, writes to a file; otherwise writes to stdout.
 
 ---
 
 ### `shadiff session`
 
-Manage recording sessions. This is a parent command with three subcommands.
+Manage recording sessions. This is a parent command with four subcommands.
 
 #### `shadiff session list`
 
@@ -163,6 +183,19 @@ Lists all sessions in a table: ID, Name, Status, Records, Created.
 #### `shadiff session show <id>`
 
 Positional argument: session ID. Displays all session metadata fields.
+
+#### `shadiff session inspect <id>`
+
+```
+shadiff session inspect abc123
+shadiff session inspect "migration-v1" --format json
+```
+
+| Flag | Short | Default | Description |
+|------|-------|---------|-------------|
+| `--format` | | `terminal` | Output format: `terminal` or `json` |
+
+Positional argument: session ID or name. Displays storage paths, artifact presence, record/replay/diff counts, and DB side-effect counts by type. Missing replay records or diff results are reported as warnings but do not make the command fail when the session exists.
 
 #### `shadiff session delete <id>`
 
