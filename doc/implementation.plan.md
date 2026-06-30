@@ -35,6 +35,14 @@ This document maps every package, source file, and key implementation pattern in
 |------|-------------|
 | `main.go` | Program entry point; calls `cmd.Execute()` and exits with code 1 on error |
 
+### `examples/e2e/` -- Official E2E Demo
+
+| File | Description |
+|------|-------------|
+| `api/main.go` | Demo API used by old/new services to produce matching HTTP responses with intentionally different DB side effects |
+| `assert/main.go` | Go-based E2E acceptance helper that parses `diff.json`, validates expected HTTP/SQL/MongoDB/Redis outcomes, and writes summary JSON |
+| `run.sh` | Docker Compose E2E orchestration script for record, replay, diff, report, assertions, and summary artifacts |
+
 ### `cmd/` -- CLI Commands
 
 | File | Description |

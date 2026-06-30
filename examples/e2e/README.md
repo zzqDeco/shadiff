@@ -22,7 +22,7 @@ The API response body is intentionally the same for old and new services. The da
 - Linux host with Docker Engine and the Docker Compose plugin
 - Bash
 - Curl
-- Go 1.25, unless `SHADIFF_BIN` points to an existing Shadiff binary
+- Go 1.25. `SHADIFF_BIN` or `--binary` can skip building Shadiff itself, but `--assert`, `--summary`, and `--summary-file` use the Go-based E2E assertion helper.
 
 The demo does not store hostnames, SSH details, or private paths in the repository.
 
@@ -93,6 +93,8 @@ Important artifacts:
 This means HTTP response behavior stayed stable while database side effects changed.
 
 When a summary is requested, the JSON includes the run/session identifiers, artifact paths, `totalCount`, `diffCount`, `httpMatch`, `hasSQLDiff`, `hasMongoDiff`, and `hasRedisDiff`.
+
+The assertion and summary path is implemented by `go run ./examples/e2e/assert`, so it does not require `jq` or shell-based JSON parsing.
 
 ## Ports
 
