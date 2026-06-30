@@ -5,7 +5,7 @@
 | Metric | Count |
 |---|---|
 | Total source files (non-test `.go`) | 55 |
-| Test files (`*_test.go`) | 36 |
+| Test files (`*_test.go`) | 37 |
 | Project tooling files | 11 |
 | Project-level docs (`doc/*.md`) | 6 |
 | File-level docs (`doc/src/**/*.plan.md`) | 55 |
@@ -24,7 +24,7 @@
 | diagnostics | `internal/diagnostics/` | 1 | 1 | 1 | 100% |
 | dbtype | `internal/dbtype/` | 1 | 1 | 1 | 100% |
 | capture | `internal/capture/` | 2 | 2 | 2 | 100% |
-| dbhook | `internal/capture/dbhook/` | 6 | 5 | 6 | 100% |
+| dbhook | `internal/capture/dbhook/` | 6 | 6 | 6 | 100% |
 | storage | `internal/storage/` | 2 | 1 | 2 | 100% |
 | replay | `internal/replay/` | 3 | 3 | 3 | 100% |
 | diff | `internal/diff/` | 8 | 8 | 8 | 100% |
@@ -33,7 +33,7 @@
 | logger | `internal/logger/` | 1 | 2 | 1 | 100% |
 | integration | `internal/integration/` | 0 | 1 | 0 | n/a |
 | examples | `examples/e2e/api/` | 1 | 0 | 1 | 100% |
-| **Total** | | **55** | **36** | **55** | **100%** |
+| **Total** | | **55** | **37** | **55** | **100%** |
 
 ## File Types Breakdown
 
@@ -85,4 +85,5 @@ The following directories and file patterns are excluded from the documentation 
 | Reporter summary helper inventory added | 2026-06-12 |
 | Manual E2E workflow inventory added | 2026-06-12 |
 | Release hardening service extraction inventory added | 2026-06-30 |
+| DB hook TCP flush lifecycle coverage added | 2026-06-30 |
 | Last updated | 2026-06-30 |
