@@ -12,32 +12,33 @@ import (
 	"testing"
 
 	"shadiff/internal/config"
+	"shadiff/internal/diagnostics"
 
 	"github.com/spf13/cobra"
 )
 
-func withDoctorCommandStub(t *testing.T, stub func(context.Context, string, ...string) doctorCommandResult) {
+func withDoctorCommandStub(t *testing.T, stub diagnostics.CommandRunner) {
 	t.Helper()
-	old := doctorExecCommand
-	t.Cleanup(func() { doctorExecCommand = old })
-	doctorExecCommand = stub
+	old := doctorCommandRunner
+	t.Cleanup(func() { doctorCommandRunner = old })
+	doctorCommandRunner = stub
 }
 
 func TestBuildDoctorReport_MissingConfigIsReadOnlyWarning(t *testing.T) {
 	configPath := filepath.Join(t.TempDir(), "missing", "config.json")
-	withDoctorCommandStub(t, func(context.Context, string, ...string) doctorCommandResult {
-		return doctorCommandResult{Found: true, Output: "ok\n"}
-	})
+	stub := func(context.Context, string, ...string) diagnostics.CommandResult {
+		return diagnostics.CommandResult{Found: true, Output: "ok\n"}
+	}
 
-	report, err := buildDoctorReport(context.Background(), doctorOptions{ConfigPath: configPath})
+	report, err := diagnostics.BuildReport(context.Background(), diagnostics.Options{ConfigPath: configPath, Command: stub})
 	if err != nil {
 		t.Fatalf("buildDoctorReport() error = %v", err)
 	}
 	if _, err := os.Stat(configPath); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("config path stat error = %v, want not exist", err)
 	}
-	if status := findDoctorCheck(t, report, "config.path").Status; status != doctorWarn {
-		t.Fatalf("config.path status = %q, want %q", status, doctorWarn)
+	if status := findDoctorCheck(t, report, "config.path").Status; status != diagnostics.Warn {
+		t.Fatalf("config.path status = %q, want %q", status, diagnostics.Warn)
 	}
 }
 
@@ -46,16 +47,16 @@ func TestBuildDoctorReport_InvalidConfigIsError(t *testing.T) {
 	if err := os.WriteFile(configPath, []byte(`{"replay":{"concurrency":0}}`), 0644); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
-	withDoctorCommandStub(t, func(context.Context, string, ...string) doctorCommandResult {
-		return doctorCommandResult{Found: true, Output: "ok\n"}
-	})
+	stub := func(context.Context, string, ...string) diagnostics.CommandResult {
+		return diagnostics.CommandResult{Found: true, Output: "ok\n"}
+	}
 
-	report, err := buildDoctorReport(context.Background(), doctorOptions{ConfigPath: configPath})
+	report, err := diagnostics.BuildReport(context.Background(), diagnostics.Options{ConfigPath: configPath, Command: stub})
 	if err != nil {
 		t.Fatalf("buildDoctorReport() error = %v", err)
 	}
-	if status := findDoctorCheck(t, report, "config.valid").Status; status != doctorError {
-		t.Fatalf("config.valid status = %q, want %q", status, doctorError)
+	if status := findDoctorCheck(t, report, "config.valid").Status; status != diagnostics.Error {
+		t.Fatalf("config.valid status = %q, want %q", status, diagnostics.Error)
 	}
 	if report.Summary.OK {
 		t.Fatal("Summary.OK = true, want false")
@@ -65,8 +66,8 @@ func TestBuildDoctorReport_InvalidConfigIsError(t *testing.T) {
 func TestRunDoctor_JSONOutput(t *testing.T) {
 	dir := t.TempDir()
 	configPath := writeDoctorConfig(t, dir, nil)
-	withDoctorCommandStub(t, func(context.Context, string, ...string) doctorCommandResult {
-		return doctorCommandResult{Found: true, Output: "ok\n"}
+	withDoctorCommandStub(t, func(context.Context, string, ...string) diagnostics.CommandResult {
+		return diagnostics.CommandResult{Found: true, Output: "ok\n"}
 	})
 
 	var out bytes.Buffer
@@ -91,7 +92,7 @@ func TestRunDoctor_JSONOutput(t *testing.T) {
 	if err := runDoctor(cmd, nil); err != nil {
 		t.Fatalf("runDoctor() error = %v", err)
 	}
-	var report doctorReport
+	var report diagnostics.Report
 	if err := json.Unmarshal(out.Bytes(), &report); err != nil {
 		t.Fatalf("Unmarshal() error = %v\noutput=%s", err, out.String())
 	}
@@ -105,8 +106,8 @@ func TestRunDoctor_JSONOutput(t *testing.T) {
 
 func TestRunDoctor_StrictFailsOnWarnings(t *testing.T) {
 	configPath := filepath.Join(t.TempDir(), "missing.json")
-	withDoctorCommandStub(t, func(context.Context, string, ...string) doctorCommandResult {
-		return doctorCommandResult{Found: false, Err: errors.New("not found")}
+	withDoctorCommandStub(t, func(context.Context, string, ...string) diagnostics.CommandResult {
+		return diagnostics.CommandResult{Found: false, Err: errors.New("not found")}
 	})
 
 	var out bytes.Buffer
@@ -144,13 +145,15 @@ func TestBuildDoctorReport_E2EPortCheck(t *testing.T) {
 	oldAddrs := doctorE2EAddrs
 	t.Cleanup(func() { doctorE2EAddrs = oldAddrs })
 	doctorE2EAddrs = []string{ln.Addr().String()}
-	withDoctorCommandStub(t, func(context.Context, string, ...string) doctorCommandResult {
-		return doctorCommandResult{Found: true, Output: "ok\n"}
-	})
+	stub := func(context.Context, string, ...string) diagnostics.CommandResult {
+		return diagnostics.CommandResult{Found: true, Output: "ok\n"}
+	}
 
-	report, err := buildDoctorReport(context.Background(), doctorOptions{
+	report, err := diagnostics.BuildReport(context.Background(), diagnostics.Options{
 		ConfigPath: filepath.Join(t.TempDir(), "missing.json"),
 		IncludeE2E: true,
+		Command:    stub,
+		E2EAddrs:   doctorE2EAddrs,
 	})
 	if err != nil {
 		t.Fatalf("buildDoctorReport() error = %v", err)
@@ -159,8 +162,8 @@ func TestBuildDoctorReport_E2EPortCheck(t *testing.T) {
 	for _, check := range report.Checks {
 		if strings.HasPrefix(check.ID, "e2e.port.") {
 			found = true
-			if check.Status != doctorError {
-				t.Fatalf("E2E port status = %q, want %q", check.Status, doctorError)
+			if check.Status != diagnostics.Error {
+				t.Fatalf("E2E port status = %q, want %q", check.Status, diagnostics.Error)
 			}
 		}
 	}
@@ -169,7 +172,7 @@ func TestBuildDoctorReport_E2EPortCheck(t *testing.T) {
 	}
 }
 
-func findDoctorCheck(t *testing.T, report doctorReport, id string) doctorCheck {
+func findDoctorCheck(t *testing.T, report diagnostics.Report, id string) diagnostics.Check {
 	t.Helper()
 	for _, check := range report.Checks {
 		if check.ID == id {
@@ -177,7 +180,7 @@ func findDoctorCheck(t *testing.T, report doctorReport, id string) doctorCheck {
 		}
 	}
 	t.Fatalf("missing doctor check %q", id)
-	return doctorCheck{}
+	return diagnostics.Check{}
 }
 
 func writeDoctorConfig(t *testing.T, dataDir string, mutate func(*config.AppConfig)) string {

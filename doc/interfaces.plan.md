@@ -309,7 +309,54 @@ type DiffStore interface {
 
 ---
 
-### 2.4 `DBHook`
+### 2.4 `CommandRunner`
+
+**Package**: `internal/diagnostics`
+**File**: `diagnostics.go`
+
+Runs external tool checks for doctor diagnostics.
+
+```go
+type CommandRunner func(context.Context, string, ...string) CommandResult
+```
+
+| Related Type | Description |
+|--------------|-------------|
+| `CommandResult` | Captures whether the command was found, combined output, and execution error |
+| `Options.Command` | Optional injection point used by tests; production defaults to `RunExternalCommand` |
+
+**Used by**: `BuildReport()` when checking Docker and Docker Compose availability.
+
+---
+
+### 2.5 `sessioninspect.Store`
+
+**Package**: `internal/sessioninspect`
+**File**: `sessioninspect.go`
+
+Narrow storage capability required by `shadiff session inspect`.
+
+```go
+type Store interface {
+    Get(id string) (*model.Session, error)
+    ListRecords(sessionID string) ([]model.Record, error)
+    ListReplayRecords(sessionID string) ([]model.Record, error)
+    LoadResults(sessionID string) ([]model.DiffResult, error)
+}
+```
+
+| Method | Description |
+|--------|-------------|
+| `Get` | Loads session metadata |
+| `ListRecords` | Loads recorded records for side-effect counts |
+| `ListReplayRecords` | Loads replay records for side-effect counts |
+| `LoadResults` | Loads diff results for result counts |
+
+**Implementor**: `FileStore` (`internal/storage/filestore.go`)
+
+---
+
+### 2.6 `DBHook`
 
 **Package**: `internal/capture/dbhook`
 **File**: `hook.go`
@@ -349,7 +396,7 @@ type DBHook interface {
 
 ---
 
-### 2.5 `Matcher`
+### 2.7 `Matcher`
 
 **Package**: `internal/diff`
 **File**: `rules.go`
@@ -378,7 +425,7 @@ type Matcher interface {
 
 ---
 
-### 2.6 `Reporter`
+### 2.8 `Reporter`
 
 **Package**: `internal/reporter`
 **File**: `reporter.go`
