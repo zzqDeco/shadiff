@@ -4,11 +4,11 @@
 
 | Metric | Count |
 |---|---|
-| Total source files (non-test `.go`) | 53 |
-| Test files (`*_test.go`) | 34 |
+| Total source files (non-test `.go`) | 55 |
+| Test files (`*_test.go`) | 36 |
 | Project tooling files | 11 |
 | Project-level docs (`doc/*.md`) | 6 |
-| File-level docs (`doc/src/**/*.plan.md`) | 53 |
+| File-level docs (`doc/src/**/*.plan.md`) | 55 |
 | Project-level coverage | 100% |
 | File-level coverage | 100% |
 
@@ -21,6 +21,7 @@
 | daemon | `internal/daemon/` | 3 | 1 | 3 | 100% |
 | model | `internal/model/` | 5 | 1 | 5 | 100% |
 | config | `internal/config/` | 3 | 2 | 3 | 100% |
+| diagnostics | `internal/diagnostics/` | 1 | 1 | 1 | 100% |
 | dbtype | `internal/dbtype/` | 1 | 1 | 1 | 100% |
 | capture | `internal/capture/` | 2 | 2 | 2 | 100% |
 | dbhook | `internal/capture/dbhook/` | 6 | 5 | 6 | 100% |
@@ -28,10 +29,11 @@
 | replay | `internal/replay/` | 3 | 3 | 3 | 100% |
 | diff | `internal/diff/` | 8 | 8 | 8 | 100% |
 | reporter | `internal/reporter/` | 5 | 1 | 5 | 100% |
+| sessioninspect | `internal/sessioninspect/` | 1 | 1 | 1 | 100% |
 | logger | `internal/logger/` | 1 | 2 | 1 | 100% |
 | integration | `internal/integration/` | 0 | 1 | 0 | n/a |
 | examples | `examples/e2e/api/` | 1 | 0 | 1 | 100% |
-| **Total** | | **53** | **34** | **53** | **100%** |
+| **Total** | | **55** | **36** | **55** | **100%** |
 
 ## File Types Breakdown
 
@@ -47,11 +49,13 @@
 | Data Model | 5 | `internal/model/session.go`, `internal/model/record.go`, `internal/model/request.go`, `internal/model/sideeffect.go`, `internal/model/diff.go` |
 | Database Type Registry | 1 | `internal/dbtype/dbtype.go` |
 | Configuration | 3 | `internal/config/config.go`, `internal/config/store.go`, `internal/config/validate.go` |
+| Diagnostic Service | 1 | `internal/diagnostics/diagnostics.go` |
 | Interface Definition | 3 | `internal/capture/dbhook/hook.go`, `internal/storage/store.go`, `internal/reporter/reporter.go` |
 | Daemon Management | 3 | `internal/daemon/pidfile.go`, `internal/daemon/process_unix.go`, `internal/daemon/process_windows.go` |
 | Capture / Diff / Replay / Storage / Report Implementation | 23 | `internal/capture/proxy.go`, `internal/capture/recorder.go`, `internal/capture/dbhook/tcp_proxy.go`, `internal/capture/dbhook/mysql.go`, `internal/capture/dbhook/postgres.go`, `internal/capture/dbhook/mongo.go`, `internal/capture/dbhook/redis.go`, `internal/storage/filestore.go`, `internal/replay/engine.go`, `internal/replay/worker.go`, `internal/replay/transform.go`, `internal/diff/engine.go`, `internal/diff/sideeffects.go`, `internal/diff/json.go`, `internal/diff/db.go`, `internal/diff/mongo.go`, `internal/diff/redis.go`, `internal/diff/rules.go`, `internal/diff/rule_loader.go`, `internal/reporter/terminal.go`, `internal/reporter/json.go`, `internal/reporter/html.go`, `internal/reporter/summary.go` |
+| Session Inspection Service | 1 | `internal/sessioninspect/sessioninspect.go` |
 | Logger | 1 | `internal/logger/logger.go` |
-| **Total** | **53** | |
+| **Total** | **55** | |
 
 ## Excluded Directories
 
@@ -80,4 +84,5 @@ The following directories and file patterns are excluded from the documentation 
 | Doctor command inventory added | 2026-06-12 |
 | Reporter summary helper inventory added | 2026-06-12 |
 | Manual E2E workflow inventory added | 2026-06-12 |
-| Last updated | 2026-06-12 |
+| Release hardening service extraction inventory added | 2026-06-30 |
+| Last updated | 2026-06-30 |

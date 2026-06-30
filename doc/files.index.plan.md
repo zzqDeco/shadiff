@@ -100,6 +100,12 @@ Exclusions:
 | `internal/config/store.go` | `doc/src/internal/config/store.go.plan.md` | Configuration Store | config |
 | `internal/config/validate.go` | `doc/src/internal/config/validate.go.plan.md` | Configuration Validation | config |
 
+### internal/diagnostics/
+
+| Source File | Doc File | File Type | Module |
+|---|---|---|---|
+| `internal/diagnostics/diagnostics.go` | `doc/src/internal/diagnostics/diagnostics.go.plan.md` | Diagnostic Service | diagnostics |
+
 ### internal/dbtype/
 
 | Source File | Doc File | File Type | Module |
@@ -162,6 +168,12 @@ Exclusions:
 | `internal/reporter/html.go` | `doc/src/internal/reporter/html.go.plan.md` | Reporter Implementation | reporter |
 | `internal/reporter/summary.go` | `doc/src/internal/reporter/summary.go.plan.md` | Reporter Helper | reporter |
 
+### internal/sessioninspect/
+
+| Source File | Doc File | File Type | Module |
+|---|---|---|---|
+| `internal/sessioninspect/sessioninspect.go` | `doc/src/internal/sessioninspect/sessioninspect.go.plan.md` | Session Inspection Service | sessioninspect |
+
 ### internal/logger/
 
 | Source File | Doc File | File Type | Module |
@@ -173,17 +185,19 @@ Exclusions:
 | Module | Source Files | Doc Files |
 |---|---|---|
 | root | 1 | 1 |
-| cmd | 11 | 11 |
+| cmd | 12 | 12 |
 | daemon | 3 | 3 |
 | model | 5 | 5 |
 | config | 3 | 3 |
+| diagnostics | 1 | 1 |
 | dbtype | 1 | 1 |
 | capture | 2 | 2 |
 | dbhook | 6 | 6 |
 | storage | 2 | 2 |
 | replay | 3 | 3 |
 | diff | 8 | 8 |
-| reporter | 4 | 4 |
+| reporter | 5 | 5 |
+| sessioninspect | 1 | 1 |
 | logger | 1 | 1 |
 | examples | 1 | 1 |
-| **Total** | **51** | **51** |
+| **Total** | **55** | **55** |

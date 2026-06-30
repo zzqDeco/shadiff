@@ -15,6 +15,7 @@ import (
 	"shadiff/internal/config"
 	"shadiff/internal/daemon"
 	"shadiff/internal/model"
+	"shadiff/internal/sessioninspect"
 	"shadiff/internal/storage"
 
 	"github.com/spf13/cobra"
@@ -864,7 +865,7 @@ func TestRunSessionInspect_JSONWarningsForMissingReplayAndDiff(t *testing.T) {
 		t.Fatalf("runSessionInspect() error: %v", err)
 	}
 
-	var report sessionInspectReport
+	var report sessioninspect.Report
 	if err := json.Unmarshal([]byte(out.String()), &report); err != nil {
 		t.Fatalf("Unmarshal() error = %v\noutput=%s", err, out.String())
 	}

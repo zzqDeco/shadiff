@@ -11,7 +11,7 @@
 - Implements the `session` command group with four subcommands: `list`, `show`, `inspect`, and `delete`.
 - Provides CRUD-like management of recording sessions stored on disk.
 - Contains the shared `getStore()` helper that creates a `storage.FileStore` instance pointing to `~/.shadiff`.
-- Changes to this file should be kept in sync with project-level documentation.
+- Delegates detailed `session inspect` report construction and terminal rendering to `internal/sessioninspect`.
 
 ## 3. Inputs & Outputs
 - Input sources:
@@ -33,7 +33,7 @@
   - `getStore() (*storage.FileStore, error)` -- Creates a FileStore rooted at `~/.shadiff`. Used by `session` subcommands and also available to other cmd files in the same package.
   - `runSessionList(cmd *cobra.Command, args []string) error` -- Lists sessions, optionally filtered by tag.
   - `runSessionShow(cmd *cobra.Command, args []string) error` -- Displays detailed metadata for a single session.
-  - `runSessionInspect(cmd *cobra.Command, args []string) error` -- Builds and prints a session inspection report in terminal or JSON format.
+  - `runSessionInspect(cmd *cobra.Command, args []string) error` -- Resolves the session, asks `internal/sessioninspect` to build a report, and renders terminal or JSON output.
   - `runSessionDelete(cmd *cobra.Command, args []string) error` -- Deletes a session after verifying it exists.
 - Package-level variables:
   - `sessionTagFilter string` -- Holds the `--tag` flag value for list filtering.
@@ -47,9 +47,10 @@
 ## 5. Dependencies
 - Internal:
   - `shadiff/internal/model` -- `Session`, `SessionFilter` types.
+  - `shadiff/internal/sessioninspect` -- session inspection report construction and terminal rendering.
   - `shadiff/internal/storage` -- `FileStore` for persistent session storage.
 - External:
-  - `encoding/json`, `fmt`, `io`, `os`, `path/filepath`, `sort` (standard library) -- Output, JSON rendering, writer abstraction, path resolution, and stable report ordering.
+  - `encoding/json`, `fmt`, `os` (standard library) -- Output and JSON rendering.
   - `text/tabwriter` (standard library) -- Aligned tabular output for `session list`.
   - `time` (standard library) -- Timestamp formatting.
   - `github.com/spf13/cobra` -- Command definition.
@@ -58,7 +59,7 @@
 - `getStore()` is used by other command files (`record.go`, `replay.go`, `diff.go`, `report.go` each create their own store independently). If the data directory logic changes, all files need updating; consider centralizing.
 - Changes to `model.Session` fields require updates to the `show` and `list` output formatting.
 - Adding new session subcommands (e.g., `session rename`, `session export`) should follow the pattern established here: define a `cobra.Command`, wire it in `init()`, implement a `runSessionXxx` handler.
-- Changes to side-effect model database type names affect `session inspect` count output.
+- Changes to side-effect model database type names affect `internal/sessioninspect` count output.
 
 ## 7. Maintenance Notes
 - The `getStore()` function duplicates data directory resolution (`~/.shadiff`) that also appears in `record.go`, `replay.go`, `diff.go`, and `report.go`. A future refactor could centralize this into a shared helper or configuration.

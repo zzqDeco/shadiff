@@ -9,8 +9,8 @@
 
 ## 2. Core Responsibility
 - Implements the `shadiff doctor` command for read-only environment diagnostics.
-- Reports config validity, data/log directory visibility, supported DB proxy types, Docker availability, Docker Compose availability, and optional official E2E port availability.
-- Provides terminal and JSON output for humans and automation.
+- Acts as the Cobra adapter for diagnostics report generation and exit-policy enforcement.
+- Provides terminal and JSON output for humans and automation while delegating diagnostic checks to `internal/diagnostics`.
 
 ## 3. Inputs & Outputs
 - Input flags:
@@ -23,26 +23,22 @@
   - JSON output with version metadata, resolved paths, check details, and summary counts.
 
 ## 4. Key Implementation Details
-- `runDoctor()` parses global command state, builds a report, renders it, and enforces exit policy.
-- `buildDoctorReport()` performs diagnostics without creating config files or data directories.
-- `loadDoctorConfig()` loads config JSON read-only and falls back to defaults when the file is missing.
-- Docker checks are warnings because they are required for integration/E2E workflows but not basic CLI usage.
-- `--e2e` port checks attempt a temporary `net.Listen` on each official demo address and close it immediately.
+- `runDoctor()` builds `diagnostics.Options` from CLI/global state, calls `diagnostics.BuildReport()`, renders terminal or JSON output, and enforces error/strict warning exit policy.
+- The command passes version metadata into the diagnostics service so JSON and terminal output keep the same build fields.
+- Diagnostic checks remain read-only and live in `internal/diagnostics`.
 
 ## 5. Dependencies
 - Internal:
-  - `shadiff/internal/config` for defaults and validation.
-  - `shadiff/internal/dbtype` for the supported DB proxy type registry.
+  - `shadiff/internal/diagnostics` for report construction and terminal rendering.
 - External:
-  - Standard library packages for JSON, process execution, networking, filesystem inspection, and table output.
+  - Standard library packages for JSON output and string normalization.
   - `github.com/spf13/cobra` for command registration.
 
 ## 6. Change Impact
 - `cmd/root.go` skips normal runtime initialization for the `doctor` command so diagnostics stay read-only.
-- Changes to official E2E ports must update `doctorE2EAddrs`.
-- Changes to supported DB proxy types are picked up through `internal/dbtype`.
+- Changes to actual diagnostic checks belong in `internal/diagnostics`.
+- User-visible output format changes must keep terminal and JSON behavior aligned.
 
 ## 7. Maintenance Notes
-- Keep `doctor` diagnostic checks side-effect free by default.
-- Add new checks as separate `doctorCheck` entries with stable IDs so JSON consumers can rely on them.
-- Warnings should be used for optional tooling; errors should be reserved for conditions that prevent the requested Shadiff workflow from working.
+- Keep this file as a thin command adapter.
+- Preserve existing exit behavior: any error check fails, and `--strict` also fails on warnings.

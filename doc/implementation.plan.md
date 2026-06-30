@@ -15,11 +15,13 @@ This document maps every package, source file, and key implementation pattern in
 | `capture` | `shadiff/internal/capture` | HTTP reverse proxy and unified recorder that captures request/response pairs and database side effects |
 | `dbhook` | `shadiff/internal/capture/dbhook` | Database protocol proxies (MySQL, PostgreSQL, MongoDB, Redis) that sniff wire protocols to extract queries, operations, and commands |
 | `config` | `shadiff/internal/config` | Application configuration schema, defaults, and thread-safe persistent config store |
+| `diagnostics` | `shadiff/internal/diagnostics` | Read-only doctor report generation, environment checks, and terminal diagnostic rendering |
 | `diff` | `shadiff/internal/diff` | Diff engine: semantic comparison of recorded vs. replayed records (status codes, headers, JSON bodies, SQL queries, MongoDB operations, Redis commands) with rule-based filtering |
 | `logger` | `shadiff/internal/logger` | Global structured logger (slog) with daily-rotated file output and domain-specific convenience methods |
 | `model` | `shadiff/internal/model` | Data model types: Session, Record, HTTPRequest, HTTPResponse, SideEffect, DiffResult, Difference, DiffSummary |
 | `replay` | `shadiff/internal/replay` | Replay engine with configurable worker pool, request transformation, and concurrent HTTP replay |
 | `reporter` | `shadiff/internal/reporter` | Report generation in terminal (ANSI), JSON, and HTML formats |
+| `sessioninspect` | `shadiff/internal/sessioninspect` | Session artifact inspection, DB side-effect count summaries, and terminal inspection rendering |
 | `storage` | `shadiff/internal/storage` | Storage interfaces and filesystem-based implementation using JSONL for records and JSON for metadata/results |
 | `daemon` | `shadiff/internal/daemon` | Daemon process management: PID file operations (write, read, remove, check liveness), platform-specific process detach (Unix Setsid / Windows CREATE_NEW_PROCESS_GROUP), process alive checking, signal sending (stop/force kill) |
 
@@ -47,8 +49,8 @@ This document maps every package, source file, and key implementation pattern in
 | `replay.go` | `shadiff replay` command; resolves session, starts optional replay DB hooks, creates replay engine, executes replay, prints summary; also contains `resolveSession()` helper |
 | `diff.go` | `shadiff diff` command; creates diff engine, runs comparison, and renders either terminal output or JSON output |
 | `report.go` | `shadiff report` command; loads saved diff results, creates reporter by format, writes output to file or stdout |
-| `session.go` | `shadiff session` parent command with `list`, `show`, `delete` subcommands; contains `getStore()` helper |
-| `doctor.go` | `shadiff doctor` read-only environment diagnostics with terminal and JSON output |
+| `session.go` | `shadiff session` parent command with `list`, `show`, `inspect`, and `delete`; delegates inspection reports to `internal/sessioninspect`; contains `getStore()` helper |
+| `doctor.go` | `shadiff doctor` command adapter; delegates read-only diagnostics to `internal/diagnostics` and enforces output/exit policy |
 
 ### `internal/daemon/` -- Daemon Process Management
 
@@ -93,6 +95,13 @@ This document maps every package, source file, and key implementation pattern in
 | `store.go` | Thread-safe config store (`Store`); loads from / saves to the configured `config.json`, provides `Get()`, `Update(fn)`, and `DataDir()` methods |
 | `validate.go` | Startup validation for config values such as replay timeout, log level, diff limits, and DB proxy declarations |
 | `config_test.go` | Tests for configuration loading and defaults |
+
+### `internal/diagnostics/` -- Doctor Diagnostics
+
+| File | Description |
+|------|-------------|
+| `diagnostics.go` | Builds read-only doctor reports, checks config/path/tool/E2E-port readiness, and renders terminal doctor output |
+| `diagnostics_test.go` | Tests read-only missing-config behavior, invalid config errors, E2E port checks, and terminal output |
 
 ### `internal/diff/` -- Diff Engine
 
@@ -149,6 +158,13 @@ This document maps every package, source file, and key implementation pattern in
 | `html.go` | `HTMLReporter`; self-contained HTML page with embedded CSS via Go `html/template`; responsive card layout with color-coded match/diff status |
 | `summary.go` | Difference summary helper grouping report differences by HTTP, SQL, MongoDB, Redis, and unknown side-effect categories |
 | `reporter_test.go` | Tests for reporter implementations, including SQL/MongoDB/Redis side-effect difference output |
+
+### `internal/sessioninspect/` -- Session Inspection
+
+| File | Description |
+|------|-------------|
+| `sessioninspect.go` | Builds session inspection reports from storage, counts artifacts and DB side effects by type, and renders terminal inspection output |
+| `sessioninspect_test.go` | Tests artifact/side-effect counting, missing replay/diff warnings, and terminal output |
 
 ### `internal/storage/` -- Persistence
 
