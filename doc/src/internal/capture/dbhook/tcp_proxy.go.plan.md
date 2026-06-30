@@ -20,6 +20,7 @@
 - `tcpProxy` implements the `DBHook` lifecycle methods used by embedded hook structs.
 - Client-to-server bytes are always forwarded before parser output is emitted; malformed parser input does not block traffic.
 - `Flush(ctx)` sends per-connection barriers and drains readable client bytes until an idle window expires.
+- Flush lifecycle tests cover active connection delivery, context timeout while waiting for ack, closed-connection skipping, and transparent forwarding when a parser emits no side effect.
 
 ## 5. Dependencies
 - Internal: `logger`, `model`.
