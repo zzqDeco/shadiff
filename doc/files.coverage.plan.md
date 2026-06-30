@@ -4,11 +4,11 @@
 
 | Metric | Count |
 |---|---|
-| Total source files (non-test `.go`) | 55 |
+| Total source files (non-test `.go`) | 60 |
 | Test files (`*_test.go`) | 37 |
 | Project tooling files | 11 |
 | Project-level docs (`doc/*.md`) | 6 |
-| File-level docs (`doc/src/**/*.plan.md`) | 55 |
+| File-level docs (`doc/src/**/*.plan.md`) | 60 |
 | Project-level coverage | 100% |
 | File-level coverage | 100% |
 
@@ -25,7 +25,7 @@
 | dbtype | `internal/dbtype/` | 1 | 1 | 1 | 100% |
 | capture | `internal/capture/` | 2 | 2 | 2 | 100% |
 | dbhook | `internal/capture/dbhook/` | 6 | 6 | 6 | 100% |
-| storage | `internal/storage/` | 2 | 1 | 2 | 100% |
+| storage | `internal/storage/` | 7 | 1 | 7 | 100% |
 | replay | `internal/replay/` | 3 | 3 | 3 | 100% |
 | diff | `internal/diff/` | 8 | 8 | 8 | 100% |
 | reporter | `internal/reporter/` | 5 | 1 | 5 | 100% |
@@ -33,7 +33,7 @@
 | logger | `internal/logger/` | 1 | 2 | 1 | 100% |
 | integration | `internal/integration/` | 0 | 1 | 0 | n/a |
 | examples | `examples/e2e/api/` | 1 | 0 | 1 | 100% |
-| **Total** | | **55** | **37** | **55** | **100%** |
+| **Total** | | **60** | **37** | **60** | **100%** |
 
 ## File Types Breakdown
 
@@ -52,10 +52,10 @@
 | Diagnostic Service | 1 | `internal/diagnostics/diagnostics.go` |
 | Interface Definition | 3 | `internal/capture/dbhook/hook.go`, `internal/storage/store.go`, `internal/reporter/reporter.go` |
 | Daemon Management | 3 | `internal/daemon/pidfile.go`, `internal/daemon/process_unix.go`, `internal/daemon/process_windows.go` |
-| Capture / Diff / Replay / Storage / Report Implementation | 23 | `internal/capture/proxy.go`, `internal/capture/recorder.go`, `internal/capture/dbhook/tcp_proxy.go`, `internal/capture/dbhook/mysql.go`, `internal/capture/dbhook/postgres.go`, `internal/capture/dbhook/mongo.go`, `internal/capture/dbhook/redis.go`, `internal/storage/filestore.go`, `internal/replay/engine.go`, `internal/replay/worker.go`, `internal/replay/transform.go`, `internal/diff/engine.go`, `internal/diff/sideeffects.go`, `internal/diff/json.go`, `internal/diff/db.go`, `internal/diff/mongo.go`, `internal/diff/redis.go`, `internal/diff/rules.go`, `internal/diff/rule_loader.go`, `internal/reporter/terminal.go`, `internal/reporter/json.go`, `internal/reporter/html.go`, `internal/reporter/summary.go` |
+| Capture / Diff / Replay / Storage / Report Implementation | 28 | `internal/capture/proxy.go`, `internal/capture/recorder.go`, `internal/capture/dbhook/tcp_proxy.go`, `internal/capture/dbhook/mysql.go`, `internal/capture/dbhook/postgres.go`, `internal/capture/dbhook/mongo.go`, `internal/capture/dbhook/redis.go`, `internal/storage/filestore.go`, `internal/storage/filestore_session.go`, `internal/storage/filestore_record.go`, `internal/storage/filestore_artifact.go`, `internal/storage/filestore_diff.go`, `internal/storage/filestore_path.go`, `internal/replay/engine.go`, `internal/replay/worker.go`, `internal/replay/transform.go`, `internal/diff/engine.go`, `internal/diff/sideeffects.go`, `internal/diff/json.go`, `internal/diff/db.go`, `internal/diff/mongo.go`, `internal/diff/redis.go`, `internal/diff/rules.go`, `internal/diff/rule_loader.go`, `internal/reporter/terminal.go`, `internal/reporter/json.go`, `internal/reporter/html.go`, `internal/reporter/summary.go` |
 | Session Inspection Service | 1 | `internal/sessioninspect/sessioninspect.go` |
 | Logger | 1 | `internal/logger/logger.go` |
-| **Total** | **55** | |
+| **Total** | **60** | |
 
 ## Excluded Directories
 
@@ -86,4 +86,5 @@ The following directories and file patterns are excluded from the documentation 
 | Manual E2E workflow inventory added | 2026-06-12 |
 | Release hardening service extraction inventory added | 2026-06-30 |
 | DB hook TCP flush lifecycle coverage added | 2026-06-30 |
+| FileStore implementation split by responsibility | 2026-06-30 |
 | Last updated | 2026-06-30 |

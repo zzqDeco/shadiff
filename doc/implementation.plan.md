@@ -171,7 +171,12 @@ This document maps every package, source file, and key implementation pattern in
 | File | Description |
 |------|-------------|
 | `store.go` | Interface definitions: `SessionStore`, `RecordStore`, `DiffStore` |
-| `filestore.go` | `FileStore` implementation; filesystem layout `{baseDir}/sessions/{id}/`; mutex-protected reads/writes; JSONL append for records; JSON for sessions and diff results; tag-based filtering |
+| `filestore.go` | `FileStore` type and constructor; creates the `{baseDir}/sessions/` root and holds shared mutex state |
+| `filestore_session.go` | Session metadata CRUD, session listing, pruning, `session.json` load/save, and tag filtering |
+| `filestore_record.go` | Record and replay-record JSONL append/list/count/lookup behavior |
+| `filestore_artifact.go` | Request-body artifact persistence and opening |
+| `filestore_diff.go` | Diff result JSON save/load behavior |
+| `filestore_path.go` | Private path-safety helpers for artifact refs |
 | `filestore_test.go` | Tests for FileStore |
 
 ---
