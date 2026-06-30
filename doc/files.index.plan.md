@@ -136,6 +136,11 @@ Exclusions:
 |---|---|---|---|
 | `internal/storage/store.go` | `doc/src/internal/storage/store.go.plan.md` | Interface Definition | storage |
 | `internal/storage/filestore.go` | `doc/src/internal/storage/filestore.go.plan.md` | Storage Implementation | storage |
+| `internal/storage/filestore_session.go` | `doc/src/internal/storage/filestore_session.go.plan.md` | Storage Implementation | storage |
+| `internal/storage/filestore_record.go` | `doc/src/internal/storage/filestore_record.go.plan.md` | Storage Implementation | storage |
+| `internal/storage/filestore_artifact.go` | `doc/src/internal/storage/filestore_artifact.go.plan.md` | Storage Implementation | storage |
+| `internal/storage/filestore_diff.go` | `doc/src/internal/storage/filestore_diff.go.plan.md` | Storage Implementation | storage |
+| `internal/storage/filestore_path.go` | `doc/src/internal/storage/filestore_path.go.plan.md` | Storage Implementation | storage |
 
 ### internal/replay/
 
@@ -193,11 +198,11 @@ Exclusions:
 | dbtype | 1 | 1 |
 | capture | 2 | 2 |
 | dbhook | 6 | 6 |
-| storage | 2 | 2 |
+| storage | 7 | 7 |
 | replay | 3 | 3 |
 | diff | 8 | 8 |
 | reporter | 5 | 5 |
 | sessioninspect | 1 | 1 |
 | logger | 1 | 1 |
 | examples | 1 | 1 |
-| **Total** | **55** | **55** |
+| **Total** | **60** | **60** |
