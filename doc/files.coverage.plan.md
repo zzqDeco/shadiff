@@ -5,7 +5,7 @@
 | Metric | Count |
 |---|---|
 | Total source files (non-test `.go`) | 61 |
-| Test files (`*_test.go`) | 38 |
+| Test files (`*_test.go`) | 43 |
 | Project tooling files | 11 |
 | Project-level docs (`doc/*.md`) | 6 |
 | File-level docs (`doc/src/**/*.plan.md`) | 61 |
@@ -17,7 +17,7 @@
 | Module | Package Path | Source Files | Test Files | File-Level Docs | Coverage |
 |---|---|---|---|---|---|
 | root | `.` | 1 | 0 | 1 | 100% |
-| cmd | `cmd/` | 12 | 6 | 12 | 100% |
+| cmd | `cmd/` | 12 | 11 | 12 | 100% |
 | daemon | `internal/daemon/` | 3 | 1 | 3 | 100% |
 | model | `internal/model/` | 5 | 1 | 5 | 100% |
 | config | `internal/config/` | 3 | 2 | 3 | 100% |
@@ -33,7 +33,7 @@
 | logger | `internal/logger/` | 1 | 2 | 1 | 100% |
 | integration | `internal/integration/` | 0 | 1 | 0 | n/a |
 | examples | `examples/e2e/` | 2 | 1 | 2 | 100% |
-| **Total** | | **61** | **38** | **61** | **100%** |
+| **Total** | | **61** | **43** | **61** | **100%** |
 
 ## File Types Breakdown
 
@@ -89,4 +89,5 @@ The following directories and file patterns are excluded from the documentation 
 | DB hook TCP flush lifecycle coverage added | 2026-06-30 |
 | FileStore implementation split by responsibility | 2026-06-30 |
 | E2E assertion helper inventory added | 2026-06-30 |
+| Command tests split by command | 2026-06-30 |
 | Last updated | 2026-06-30 |
