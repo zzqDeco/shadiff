@@ -35,6 +35,7 @@ Exclusions:
 | Source File | Doc File | File Type | Module |
 |---|---|---|---|
 | `examples/e2e/api/main.go` | `doc/src/examples/e2e/api/main.go.plan.md` | Demo API | examples |
+| `examples/e2e/assert/main.go` | `doc/src/examples/e2e/assert/main.go.plan.md` | E2E Assertion Helper | examples |
 | `examples/e2e/api/Dockerfile` | - | Demo Tooling | examples |
 | `examples/e2e/docker-compose.yml` | - | Demo Tooling | examples |
 | `examples/e2e/init/mongo.js` | - | Demo Data Initialization | examples |
@@ -204,5 +205,5 @@ Exclusions:
 | reporter | 5 | 5 |
 | sessioninspect | 1 | 1 |
 | logger | 1 | 1 |
-| examples | 1 | 1 |
-| **Total** | **60** | **60** |
+| examples | 2 | 2 |
+| **Total** | **61** | **61** |

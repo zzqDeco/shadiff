@@ -153,6 +153,8 @@ go test -v -tags integration ./internal/integration -count=1 -timeout=20m
 
 Demo 会把隔离产物写到 `examples/e2e/.work/<run-id>/`，包括 `diff.json`、`report.html` 和可选 summary JSON。端口、预期差异、release binary 验收方式和排障说明见 `examples/e2e/README.md`。
 
+`--assert`、`--summary` 和 `--summary-file` 使用 `examples/e2e/assert` 中的 Go helper，不依赖 `jq`。
+
 ## 使用方法
 
 ### 环境诊断

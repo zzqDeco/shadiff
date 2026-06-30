@@ -153,6 +153,8 @@ Run the reproducible Docker Compose demo to exercise the real CLI across `record
 
 The demo writes isolated artifacts under `examples/e2e/.work/<run-id>/`, including `diff.json`, `report.html`, and optional summary JSON. See `examples/e2e/README.md` for ports, expected differences, release-binary validation, and troubleshooting.
 
+`--assert`, `--summary`, and `--summary-file` use the Go-based helper in `examples/e2e/assert`; no `jq` dependency is required.
+
 ## Usage
 
 ### Environment Diagnostics

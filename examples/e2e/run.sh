@@ -248,108 +248,50 @@ build_shadiff() {
   (cd "${ROOT_DIR}" && go build -o "${SHADIFF_BIN}" .)
 }
 
-assert_demo() {
+run_acceptance_helper() {
+  local assert_flag="$1"
+  local summary_path="$2"
+  local print_flag="$3"
   local diff_json="${WORK_DIR}/artifacts/diff.json"
   local report_html="${WORK_DIR}/artifacts/report.html"
   local records_file
   local replay_file
-
-  records_file="$(find "${WORK_DIR}/data/sessions" -name records.jsonl -print -quit)"
-  replay_file="$(find "${WORK_DIR}/data/sessions" -name replay-records.jsonl -print -quit)"
-
-  [[ -s "${records_file}" ]] || fail "record stage did not write records.jsonl"
-  [[ -s "${replay_file}" ]] || fail "replay stage did not write replay-records.jsonl"
-  [[ -s "${diff_json}" ]] || fail "diff stage did not write diff.json"
-  [[ -s "${report_html}" ]] || fail "report stage did not write report.html"
-
-  grep -Eq '"totalCount": [1-9]' "${diff_json}" || fail "diff summary has no records"
-  grep -Eq '"diffCount": [1-9]' "${diff_json}" || fail "diff summary has no expected differences"
-  if grep -Eq '"kind": "(status_code|header|body|body_field)"' "${diff_json}"; then
-    fail "diff.json contains HTTP response differences"
-  fi
-  grep -q '"kind": "db_query"' "${diff_json}" || fail "diff.json does not contain a SQL side-effect difference"
-  grep -q '"kind": "mongo_op"' "${diff_json}" || fail "diff.json does not contain a MongoDB side-effect difference"
-  grep -q '"kind": "redis_command"' "${diff_json}" || fail "diff.json does not contain a Redis side-effect difference"
-}
-
-extract_json_number() {
-  local file="$1"
-  local key="$2"
-  sed -n "s/.*\"${key}\": \([0-9][0-9]*\).*/\1/p" "${file}" | head -n 1
-}
-
-json_bool_for_kind_absent() {
-  local file="$1"
-  local pattern="$2"
-  if grep -Eq "${pattern}" "${file}"; then
-    printf 'false'
-  else
-    printf 'true'
-  fi
-}
-
-json_bool_for_kind_present() {
-  local file="$1"
-  local kind="$2"
-  if grep -q "\"kind\": \"${kind}\"" "${file}"; then
-    printf 'true'
-  else
-    printf 'false'
-  fi
-}
-
-write_summary() {
-  local output_path="$1"
-  local diff_json="${WORK_DIR}/artifacts/diff.json"
-  local report_html="${WORK_DIR}/artifacts/report.html"
-  local records_file
-  local replay_file
-  local total_count
-  local diff_count
-  local http_match
-  local has_sql_diff
-  local has_mongo_diff
-  local has_redis_diff
+  local args
 
   records_file="$(find "${WORK_DIR}/data/sessions" -name records.jsonl -print -quit 2>/dev/null || true)"
   replay_file="$(find "${WORK_DIR}/data/sessions" -name replay-records.jsonl -print -quit 2>/dev/null || true)"
-  total_count="$(extract_json_number "${diff_json}" "totalCount")"
-  diff_count="$(extract_json_number "${diff_json}" "diffCount")"
-  http_match="$(json_bool_for_kind_absent "${diff_json}" '"kind": "(status_code|header|body|body_field)"')"
-  has_sql_diff="$(json_bool_for_kind_present "${diff_json}" "db_query")"
-  has_mongo_diff="$(json_bool_for_kind_present "${diff_json}" "mongo_op")"
-  has_redis_diff="$(json_bool_for_kind_present "${diff_json}" "redis_command")"
 
-  cat >"${output_path}" <<EOF
-{
-  "runId": "${RUN_ID}",
-  "sessionName": "${SESSION_NAME}",
-  "workDir": "${WORK_DIR}",
-  "configFile": "${CONFIG_FILE}",
-  "artifactsDir": "${WORK_DIR}/artifacts",
-  "recordsFile": "${records_file}",
-  "replayRecordsFile": "${replay_file}",
-  "diffFile": "${diff_json}",
-  "reportFile": "${report_html}",
-  "totalCount": ${total_count:-0},
-  "diffCount": ${diff_count:-0},
-  "httpMatch": ${http_match},
-  "hasSQLDiff": ${has_sql_diff},
-  "hasMongoDiff": ${has_mongo_diff},
-  "hasRedisDiff": ${has_redis_diff}
-}
-EOF
-}
+  args=(
+    go run ./examples/e2e/assert
+    --records "${records_file}"
+    --replay-records "${replay_file}"
+    --diff "${diff_json}"
+    --report "${report_html}"
+    --run-id "${RUN_ID}"
+    --session-name "${SESSION_NAME}"
+    --work-dir "${WORK_DIR}"
+    --config-file "${CONFIG_FILE}"
+    --artifacts-dir "${WORK_DIR}/artifacts"
+  )
+  if [[ "${assert_flag}" -eq 1 ]]; then
+    args+=(--assert)
+  fi
+  if [[ -n "${summary_path}" ]]; then
+    args+=(--summary-file "${summary_path}")
+  fi
+  if [[ "${print_flag}" -eq 1 ]]; then
+    args+=(--print-summary)
+  fi
 
-print_summary() {
-  local summary_file="$1"
-  log "acceptance summary:"
-  sed -n '1,80p' "${summary_file}"
+  (cd "${ROOT_DIR}" && "${args[@]}")
 }
 
 stage "preflight"
 require_command docker
 require_command curl
+if [[ "${ASSERT}" -eq 1 || -n "${SUMMARY_FILE}" || "${PRINT_SUMMARY}" -eq 1 ]]; then
+  require_command go
+fi
 choose_compose
 write_config
 build_shadiff
@@ -413,18 +355,18 @@ stage "report"
 
 if [[ "${ASSERT}" -eq 1 ]]; then
   stage "assert"
-  assert_demo
+  run_acceptance_helper 1 "" 0
 fi
 
 if [[ -n "${SUMMARY_FILE}" || "${PRINT_SUMMARY}" -eq 1 ]]; then
   stage "summary"
   summary_path="${SUMMARY_FILE:-${WORK_DIR}/artifacts/summary.json}"
   mkdir -p "$(dirname "${summary_path}")"
-  write_summary "${summary_path}"
-  log "summary: ${summary_path}"
   if [[ "${PRINT_SUMMARY}" -eq 1 ]]; then
-    print_summary "${summary_path}"
+    log "acceptance summary:"
   fi
+  run_acceptance_helper 0 "${summary_path}" "${PRINT_SUMMARY}"
+  log "summary: ${summary_path}"
 fi
 
 log "demo complete"

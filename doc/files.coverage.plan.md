@@ -4,11 +4,11 @@
 
 | Metric | Count |
 |---|---|
-| Total source files (non-test `.go`) | 60 |
-| Test files (`*_test.go`) | 37 |
+| Total source files (non-test `.go`) | 61 |
+| Test files (`*_test.go`) | 38 |
 | Project tooling files | 11 |
 | Project-level docs (`doc/*.md`) | 6 |
-| File-level docs (`doc/src/**/*.plan.md`) | 60 |
+| File-level docs (`doc/src/**/*.plan.md`) | 61 |
 | Project-level coverage | 100% |
 | File-level coverage | 100% |
 
@@ -32,8 +32,8 @@
 | sessioninspect | `internal/sessioninspect/` | 1 | 1 | 1 | 100% |
 | logger | `internal/logger/` | 1 | 2 | 1 | 100% |
 | integration | `internal/integration/` | 0 | 1 | 0 | n/a |
-| examples | `examples/e2e/api/` | 1 | 0 | 1 | 100% |
-| **Total** | | **60** | **37** | **60** | **100%** |
+| examples | `examples/e2e/` | 2 | 1 | 2 | 100% |
+| **Total** | | **61** | **38** | **61** | **100%** |
 
 ## File Types Breakdown
 
@@ -45,6 +45,7 @@
 | Demo Data Initialization | 3 | `examples/e2e/init/mongo.js`, `examples/e2e/init/mysql.sql`, `examples/e2e/init/postgres.sql` |
 | GitHub Actions Workflows | 4 | `.github/workflows/ci.yml`, `.github/workflows/integration.yml`, `.github/workflows/release.yml`, `.github/workflows/e2e.yml` |
 | Demo API | 1 | `examples/e2e/api/main.go` |
+| E2E Assertion Helper | 1 | `examples/e2e/assert/main.go` |
 | CLI Command / Helper | 12 | `cmd/root.go`, `cmd/version.go`, `cmd/session.go`, `cmd/runtime.go`, `cmd/dbproxy.go`, `cmd/doctor.go`, `cmd/record.go`, `cmd/record_stop.go`, `cmd/record_status.go`, `cmd/replay.go`, `cmd/diff.go`, `cmd/report.go` |
 | Data Model | 5 | `internal/model/session.go`, `internal/model/record.go`, `internal/model/request.go`, `internal/model/sideeffect.go`, `internal/model/diff.go` |
 | Database Type Registry | 1 | `internal/dbtype/dbtype.go` |
@@ -55,7 +56,7 @@
 | Capture / Diff / Replay / Storage / Report Implementation | 28 | `internal/capture/proxy.go`, `internal/capture/recorder.go`, `internal/capture/dbhook/tcp_proxy.go`, `internal/capture/dbhook/mysql.go`, `internal/capture/dbhook/postgres.go`, `internal/capture/dbhook/mongo.go`, `internal/capture/dbhook/redis.go`, `internal/storage/filestore.go`, `internal/storage/filestore_session.go`, `internal/storage/filestore_record.go`, `internal/storage/filestore_artifact.go`, `internal/storage/filestore_diff.go`, `internal/storage/filestore_path.go`, `internal/replay/engine.go`, `internal/replay/worker.go`, `internal/replay/transform.go`, `internal/diff/engine.go`, `internal/diff/sideeffects.go`, `internal/diff/json.go`, `internal/diff/db.go`, `internal/diff/mongo.go`, `internal/diff/redis.go`, `internal/diff/rules.go`, `internal/diff/rule_loader.go`, `internal/reporter/terminal.go`, `internal/reporter/json.go`, `internal/reporter/html.go`, `internal/reporter/summary.go` |
 | Session Inspection Service | 1 | `internal/sessioninspect/sessioninspect.go` |
 | Logger | 1 | `internal/logger/logger.go` |
-| **Total** | **60** | |
+| **Total** | **61** | |
 
 ## Excluded Directories
 
@@ -87,4 +88,5 @@ The following directories and file patterns are excluded from the documentation 
 | Release hardening service extraction inventory added | 2026-06-30 |
 | DB hook TCP flush lifecycle coverage added | 2026-06-30 |
 | FileStore implementation split by responsibility | 2026-06-30 |
+| E2E assertion helper inventory added | 2026-06-30 |
 | Last updated | 2026-06-30 |
